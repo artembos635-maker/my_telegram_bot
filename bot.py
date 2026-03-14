@@ -35,9 +35,9 @@ def ask_deepseek(user_message, chat_id, user_name):
             "content": user_message
         })
         
-        # Ограничиваем историю последними 10 сообщениями
-        if len(conversation_history[chat_id]) > 10:
-            conversation_history[chat_id] = conversation_history[chat_id][-10:]
+        # Ограничиваем историю последними 1000 сообщениями
+        if len(conversation_history[chat_id]) > 1000:
+            conversation_history[chat_id] = conversation_history[chat_id][-1000:]
         
         # Формируем сообщения для API
         messages = [
