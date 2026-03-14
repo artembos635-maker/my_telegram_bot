@@ -7,7 +7,7 @@ import time
 
 # ========== НАСТРОЙКИ ==========
 # Твой токен из переменных окружения (Railway)
-TOKEN = os.environ.get('TOKEN')
+TOKEN ='8749955457:AAFrM_9bMzQoT6ibN97Kx5SHHWTKHrS0QRc'
 # Ключ DeepSeek (добавим в Railway)
 DEEPSEEK_API_KEY = os.environ.get('DEEPSEEK_API_KEY')
 
