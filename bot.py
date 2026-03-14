@@ -2,85 +2,13 @@ import telebot
 from telebot import types
 import requests
 from datetime import datetime
-import os
 import time
 
-# ========== НАСТРОЙКИ ==========
-# Твой токен из переменных окружения (Railway)
-TOKEN ='8749955457:AAFrM_9bMzQoT6ibN97Kx5SHHWTKHrS0QRc'
-# Ключ DeepSeek (добавим в Railway)
-DEEPSEEK_API_KEY = os.environ.get('DEEPSEEK_API_KEY')
+# ========== ТОКЕН ПРЯМО ЗДЕСЬ ==========
+TOKEN = '8749955457:AAFrM_9bMzQoT6ibN97Kx5SHHWTKHrS0QRc'
 
 # Создаем бота
 bot = telebot.TeleBot(TOKEN)
-
-# Словарь для хранения истории разговоров
-conversation_history = {}
-
-# ========== ФУНКЦИЯ ДЛЯ ЗАПРОСА К DEEPSEEK ==========
-def ask_deepseek(user_message, chat_id, user_name):
-    """Отправляет запрос к DeepSeek API и получает ответ"""
-    try:
-        # Проверяем наличие ключа
-        if not DEEPSEEK_API_KEY:
-            return "🔑 Ошибка: не настроен ключ DeepSeek API. Попроси Артёма добавить его в Railway!"
-
-        # Инициализируем историю чата
-        if chat_id not in conversation_history:
-            conversation_history[chat_id] = []
-        
-        # Добавляем сообщение пользователя в историю
-        conversation_history[chat_id].append({
-            "role": "user",
-            "content": user_message
-        })
-        
-        # Ограничиваем историю последними 1000 сообщениями
-        if len(conversation_history[chat_id]) > 1000:
-            conversation_history[chat_id] = conversation_history[chat_id][-1000:]
-        
-        # Формируем сообщения для API
-        messages = [
-            {"role": "system", "content": f"Ты дружелюбный ИИ-помощник. Ты общаешься с пользователем по имени {user_name}. Отвечай кратко, по делу, но дружелюбно."}
-        ]
-        messages.extend(conversation_history[chat_id])
-        
-        # Запрос к DeepSeek API
-        response = requests.post(
-            url="https://api.deepseek.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                "Content-Type": "application/json"
-            },
-            json={
-                "model": "deepseek-chat",
-                "messages": messages,
-                "max_tokens": 1000,
-                "temperature": 0.7
-            },
-            timeout=30
-        )
-        
-        # Проверяем ответ
-        if response.status_code != 200:
-            print(f"Ошибка API: {response.status_code}")
-            return f"😕 Ошибка API: {response.status_code}"
-        
-        # Получаем ответ
-        data = response.json()
-        ai_message = data['choices'][0]['message']['content']
-        
-        # Добавляем ответ в историю
-        conversation_history[chat_id].append({
-            "role": "assistant",
-            "content": ai_message
-        })
-        
-        return ai_message
-        
-    except Exception as e:
-        print(f"Ошибка: {e}")
-        return f"😵 Произошла ошибка, но бот работает! Попробуй еще раз."
 
 # ========== ФУНКЦИЯ КУРСОВ ВАЛЮТ ==========
 def get_belarus_rates():
@@ -115,11 +43,6 @@ def get_belarus_rates():
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_name = message.from_user.first_name
-    chat_id = message.chat.id
-    
-    # Очищаем историю
-    if chat_id in conversation_history:
-        conversation_history[chat_id] = []
     
     # Клавиатура
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
@@ -127,16 +50,14 @@ def send_welcome(message):
         types.KeyboardButton("👋 Дарово"),
         types.KeyboardButton("😢 пока"),
         types.KeyboardButton("🤔 Как делишки?"),
-        types.KeyboardButton("💰 Курсы валют"),
-        types.KeyboardButton("🤖 Спросить DeepSeek")
+        types.KeyboardButton("💰 Курсы валют")
     )
     
     bot.send_message(
         message.chat.id,
-        f"Привет, {user_name}! 👋\nЯ ИИ созданный Артёмом\n\n"
-        f"🇧🇾 Курсы Нацбанка Беларуси\n"
-        f"🤖 Работаю на DeepSeek\n\n"
-        f"Нажми '🤖 Спросить DeepSeek' и задавай вопросы!",
+        f"Привет, {user_name}! 👋\nЯ бот Артёма\n\n"
+        f"🇧🇾 Курсы Нацбанка Беларуси\n\n"
+        f"Нажимай кнопки внизу!",
         reply_markup=markup
     )
 
@@ -145,22 +66,13 @@ def send_welcome(message):
 def send_help(message):
     bot.send_message(
         message.chat.id,
-        "🇧🇾 **Бот с DeepSeek**\n\n"
+        "🇧🇾 **Бот курсов валют**\n\n"
         "Команды:\n"
         "/start - запуск\n"
         "/help - помощь\n"
-        "/rates - курсы валют\n"
-        "/clear - очистить историю",
+        "/rates - курсы валют",
         parse_mode="Markdown"
     )
-
-# ========== КОМАНДА /clear ==========
-@bot.message_handler(commands=['clear'])
-def clear_history(message):
-    chat_id = message.chat.id
-    if chat_id in conversation_history:
-        conversation_history[chat_id] = []
-    bot.send_message(message.chat.id, "🧹 История очищена!")
 
 # ========== КОМАНДА /rates ==========
 @bot.message_handler(commands=['rates'])
@@ -187,15 +99,12 @@ def show_rates(message):
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
     text = message.text
-    chat_id = message.chat.id
-    user_name = message.from_user.first_name
     
-    # Кнопки
     if text == "👋 Дарово":
-        bot.send_message(chat_id, "Дарово! 😊")
+        bot.send_message(message.chat.id, "Дарово! 😊")
         
     elif text == "😢 пока":
-        bot.send_message(chat_id, "Пока! 👋")
+        bot.send_message(message.chat.id, "Пока! 👋")
         
     elif text == "🤔 Как делишки?":
         markup = types.InlineKeyboardMarkup()
@@ -203,23 +112,16 @@ def handle_text(message):
             types.InlineKeyboardButton("✅ Отлично", callback_data="good"),
             types.InlineKeyboardButton("❌ Не очень", callback_data="bad")
         )
-        bot.send_message(chat_id, "У меня всё хорошо! А у тебя?", reply_markup=markup)
+        bot.send_message(message.chat.id, "У меня всё хорошо! А у тебя?", reply_markup=markup)
         
     elif text == "💰 Курсы валют":
         show_rates(message)
         
-    elif text == "🤖 Спросить DeepSeek":
-        bot.send_message(
-            chat_id,
-            "🤖 **Режим DeepSeek**\n\nПиши любые вопросы!",
-            parse_mode="Markdown"
-        )
-        
     else:
-        # Отправляем в DeepSeek
-        bot.send_chat_action(chat_id, 'typing')
-        response = ask_deepseek(text, chat_id, user_name)
-        bot.send_message(chat_id, response)
+        bot.send_message(
+            message.chat.id,
+            "Используй кнопки внизу экрана!"
+        )
 
 # ========== КНОПКИ ==========
 @bot.callback_query_handler(func=lambda call: True)
@@ -232,7 +134,7 @@ def handle_callback(call):
 
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    print("✅ Бот запущен...")
+    print("✅ Бот с курсами валют запущен...")
     while True:
         try:
             bot.infinity_polling(timeout=60, long_polling_timeout=60)
