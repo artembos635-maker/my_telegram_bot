@@ -3,25 +3,93 @@ from telebot import types
 import requests
 from datetime import datetime
 import os
+import time
 
+# ========== НАСТРОЙКИ ==========
 # Твой токен из переменных окружения (Railway)
 TOKEN = os.environ.get('TOKEN')
+# Ключ DeepSeek (добавим в Railway)
+DEEPSEEK_API_KEY = os.environ.get('DEEPSEEK_API_KEY')
 
+# Создаем бота
 bot = telebot.TeleBot(TOKEN)
 
-# ========== ФУНКЦИЯ ДЛЯ ПОЛУЧЕНИЯ КУРСОВ НБРБ ==========
-def get_belarus_rates():
-    """
-    Получает курсы валют с сайта Нацбанка Беларуси
-    """
+# Словарь для хранения истории разговоров
+conversation_history = {}
+
+# ========== ФУНКЦИЯ ДЛЯ ЗАПРОСА К DEEPSEEK ==========
+def ask_deepseek(user_message, chat_id, user_name):
+    """Отправляет запрос к DeepSeek API и получает ответ"""
     try:
-        # API Национального банка РБ (официальное, бесплатное)
-        url = "https://api.nbrb.by/exrates/rates?periodicity=0"
+        # Проверяем наличие ключа
+        if not DEEPSEEK_API_KEY:
+            return "🔑 Ошибка: не настроен ключ DeepSeek API. Попроси Артёма добавить его в Railway!"
+
+        # Инициализируем историю чата
+        if chat_id not in conversation_history:
+            conversation_history[chat_id] = []
         
+        # Добавляем сообщение пользователя в историю
+        conversation_history[chat_id].append({
+            "role": "user",
+            "content": user_message
+        })
+        
+        # Ограничиваем историю последними 10 сообщениями
+        if len(conversation_history[chat_id]) > 10:
+            conversation_history[chat_id] = conversation_history[chat_id][-10:]
+        
+        # Формируем сообщения для API
+        messages = [
+            {"role": "system", "content": f"Ты дружелюбный ИИ-помощник. Ты общаешься с пользователем по имени {user_name}. Отвечай кратко, по делу, но дружелюбно."}
+        ]
+        messages.extend(conversation_history[chat_id])
+        
+        # Запрос к DeepSeek API
+        response = requests.post(
+            url="https://api.deepseek.com/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "deepseek-chat",
+                "messages": messages,
+                "max_tokens": 1000,
+                "temperature": 0.7
+            },
+            timeout=30
+        )
+        
+        # Проверяем ответ
+        if response.status_code != 200:
+            print(f"Ошибка API: {response.status_code}")
+            return f"😕 Ошибка API: {response.status_code}"
+        
+        # Получаем ответ
+        data = response.json()
+        ai_message = data['choices'][0]['message']['content']
+        
+        # Добавляем ответ в историю
+        conversation_history[chat_id].append({
+            "role": "assistant",
+            "content": ai_message
+        })
+        
+        return ai_message
+        
+    except Exception as e:
+        print(f"Ошибка: {e}")
+        return f"😵 Произошла ошибка, но бот работает! Попробуй еще раз."
+
+# ========== ФУНКЦИЯ КУРСОВ ВАЛЮТ ==========
+def get_belarus_rates():
+    """Получает курсы валют с сайта Нацбанка Беларуси"""
+    try:
+        url = "https://api.nbrb.by/exrates/rates?periodicity=0"
         response = requests.get(url, timeout=10)
         data = response.json()
         
-        # Создаем словарь с нужными валютами
         rates = {}
         currencies = {
             'USD': 'Доллар США',
@@ -39,31 +107,36 @@ def get_belarus_rates():
                     'rate': currency['Cur_OfficialRate'],
                     'scale': currency['Cur_Scale']
                 }
-        
         return rates
-    except Exception as e:
-        print(f"Ошибка при получении курсов: {e}")
+    except:
         return None
 
 # ========== КОМАНДА /start ==========
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     user_name = message.from_user.first_name
+    chat_id = message.chat.id
     
-    # Создаём клавиатуру с кнопками
+    # Очищаем историю
+    if chat_id in conversation_history:
+        conversation_history[chat_id] = []
+    
+    # Клавиатура
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    
-    btn1 = types.KeyboardButton("👋 Дарово")
-    btn2 = types.KeyboardButton("😢 пока")
-    btn3 = types.KeyboardButton("🤔 Как делишки?")
-    btn4 = types.KeyboardButton("💰 Курсы валют (Беларусь)")
-    
-    markup.add(btn1, btn2, btn3, btn4)
+    markup.add(
+        types.KeyboardButton("👋 Дарово"),
+        types.KeyboardButton("😢 пока"),
+        types.KeyboardButton("🤔 Как делишки?"),
+        types.KeyboardButton("💰 Курсы валют"),
+        types.KeyboardButton("🤖 Спросить DeepSeek")
+    )
     
     bot.send_message(
-        message.chat.id, 
-        f"Привет, {user_name}! 👋\nЯ ИИ созданный Артёмом Рызвановичем\n\n"
-        f"🇧🇾 Я показываю официальные курсы Нацбанка Беларуси!", 
+        message.chat.id,
+        f"Привет, {user_name}! 👋\nЯ ИИ созданный Артёмом\n\n"
+        f"🇧🇾 Курсы Нацбанка Беларуси\n"
+        f"🤖 Работаю на DeepSeek\n\n"
+        f"Нажми '🤖 Спросить DeepSeek' и задавай вопросы!",
         reply_markup=markup
     )
 
@@ -72,115 +145,97 @@ def send_welcome(message):
 def send_help(message):
     bot.send_message(
         message.chat.id,
-        "🇧🇾 **Бот курсов валют НБРБ**\n\n"
+        "🇧🇾 **Бот с DeepSeek**\n\n"
         "Команды:\n"
         "/start - запуск\n"
         "/help - помощь\n"
-        "/rates - курсы всех валют\n\n"
-        "Или просто жми кнопки внизу!",
+        "/rates - курсы валют\n"
+        "/clear - очистить историю",
         parse_mode="Markdown"
     )
+
+# ========== КОМАНДА /clear ==========
+@bot.message_handler(commands=['clear'])
+def clear_history(message):
+    chat_id = message.chat.id
+    if chat_id in conversation_history:
+        conversation_history[chat_id] = []
+    bot.send_message(message.chat.id, "🧹 История очищена!")
 
 # ========== КОМАНДА /rates ==========
 @bot.message_handler(commands=['rates'])
 def show_rates_command(message):
     show_rates(message)
 
-# ========== ФУНКЦИЯ ПОКАЗА КУРСОВ ==========
+# ========== ПОКАЗ КУРСОВ ==========
 def show_rates(message):
     rates = get_belarus_rates()
     
     if not rates:
-        bot.send_message(
-            message.chat.id,
-            "😕 Не удалось получить курсы. Иди читай Губаты."
-        )
+        bot.send_message(message.chat.id, "😕 Не удалось получить курсы")
         return
     
-    # Формируем сообщение с курсами
-    text = "🇧🇾 **Официальные курсы НБРБ**\n"
+    text = "🇧🇾 **Курсы НБРБ**\n"
     text += f"📅 {datetime.now().strftime('%d.%m.%Y')}\n\n"
     
-    # USD
-    if 'USD' in rates:
-        text += f"💵 **{rates['USD']['name']}**\n"
-        text += f"{rates['USD']['scale']} USD = {rates['USD']['rate']:.4f} BYN\n\n"
-    
-    # EUR
-    if 'EUR' in rates:
-        text += f"💶 **{rates['EUR']['name']}**\n"
-        text += f"{rates['EUR']['scale']} EUR = {rates['EUR']['rate']:.4f} BYN\n\n"
-    
-    # RUB (особое внимание - российский рубль)
-    if 'RUB' in rates:
-        text += f"🇷🇺 **{rates['RUB']['name']}**\n"
-        text += f"{rates['RUB']['scale']} RUB = {rates['RUB']['rate']:.4f} BYN\n\n"
-    
-    # PLN (польский злотый - актуально для Беларуси)
-    if 'PLN' in rates:
-        text += f"🇵🇱 **{rates['PLN']['name']}**\n"
-        text += f"{rates['PLN']['scale']} PLN = {rates['PLN']['rate']:.4f} BYN\n\n"
-    
-    # UAH
-    if 'UAH' in rates:
-        text += f"🇺🇦 **{rates['UAH']['name']}**\n"
-        text += f"{rates['UAH']['scale']} UAH = {rates['UAH']['rate']:.4f} BYN\n\n"
-    
-    # CNY
-    if 'CNY' in rates:
-        text += f"🇨🇳 **{rates['CNY']['name']}**\n"
-        text += f"{rates['CNY']['scale']} CNY = {rates['CNY']['rate']:.4f} BYN"
+    for code, data in rates.items():
+        text += f"{data['scale']} {code} = {data['rate']:.4f} BYN\n"
     
     bot.send_message(message.chat.id, text, parse_mode="Markdown")
 
-# ========== ОБРАБОТКА ТЕКСТОВЫХ СООБЩЕНИЙ ==========
+# ========== ОБРАБОТКА СООБЩЕНИЙ ==========
 @bot.message_handler(func=lambda message: True)
 def handle_text(message):
     text = message.text
+    chat_id = message.chat.id
+    user_name = message.from_user.first_name
     
-    if text == "👋 Дарово":                          # Исправлено!
-        bot.send_message(message.chat.id, "Дарово! Рад тебя видеть! 😊")
+    # Кнопки
+    if text == "👋 Дарово":
+        bot.send_message(chat_id, "Дарово! 😊")
         
-    elif text == "😢 пока":                           # Исправлено!
-        bot.send_message(message.chat.id, "Пока! Заходи ещё! 👋")
+    elif text == "😢 пока":
+        bot.send_message(chat_id, "Пока! 👋")
         
-    elif text == "🤔 Как делишки?":                   # Исправлено!
-        markup = types.InlineKeyboardMarkup(row_width=2)
-        btn_yes = types.InlineKeyboardButton("✅ Отлично!", callback_data="good")
-        btn_no = types.InlineKeyboardButton("❌ Не очень", callback_data="bad")
-        markup.add(btn_yes, btn_no)
-        
-        bot.send_message(
-            message.chat.id, 
-            "У меня всё хорошо! А у тебя?", 
-            reply_markup=markup
+    elif text == "🤔 Как делишки?":
+        markup = types.InlineKeyboardMarkup()
+        markup.add(
+            types.InlineKeyboardButton("✅ Отлично", callback_data="good"),
+            types.InlineKeyboardButton("❌ Не очень", callback_data="bad")
         )
+        bot.send_message(chat_id, "У меня всё хорошо! А у тебя?", reply_markup=markup)
         
-    elif text == "💰 Курсы валют (Беларусь)":
+    elif text == "💰 Курсы валют":
         show_rates(message)
         
-    else:
+    elif text == "🤖 Спросить DeepSeek":
         bot.send_message(
-            message.chat.id, 
-            f"Ты написал: {text}\n\nИспользуй кнопки внизу экрана или команды:\n/start\n/help\n/rates"
+            chat_id,
+            "🤖 **Режим DeepSeek**\n\nПиши любые вопросы!",
+            parse_mode="Markdown"
         )
+        
+    else:
+        # Отправляем в DeepSeek
+        bot.send_chat_action(chat_id, 'typing')
+        response = ask_deepseek(text, chat_id, user_name)
+        bot.send_message(chat_id, response)
 
-# ========== ОБРАБОТКА НАЖАТИЙ НА КНОПКИ ==========
+# ========== КНОПКИ ==========
 @bot.callback_query_handler(func=lambda call: True)
 def handle_callback(call):
     if call.data == "good":
-        bot.send_message(call.message.chat.id, "😊 Отлично! Рад за тебя!")
-        
+        bot.send_message(call.message.chat.id, "😊 Отлично!")
     elif call.data == "bad":
-        bot.send_message(
-            call.message.chat.id, 
-            "😔 Не расстраивайся! Всё наладится!"
-        )
-    
+        bot.send_message(call.message.chat.id, "😔 Всё наладится!")
     bot.answer_callback_query(call.id)
 
 # ========== ЗАПУСК ==========
-print("🇧🇾 Бот с курсами НБРБ запущен...")
-bot.infinity_polling()
-
-  
+if __name__ == "__main__":
+    print("✅ Бот запущен...")
+    while True:
+        try:
+            bot.infinity_polling(timeout=60, long_polling_timeout=60)
+        except Exception as e:
+            print(f"Ошибка: {e}")
+            time.sleep(5)
