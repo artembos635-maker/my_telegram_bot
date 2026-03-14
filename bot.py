@@ -138,13 +138,13 @@ def show_rates(message):
 def handle_text(message):
     text = message.text
     
-    if text == "👋 Привет":
+    if text == "👋 Дарово":                          # Исправлено!
         bot.send_message(message.chat.id, "Дарово! Рад тебя видеть! 😊")
         
-    elif text == "😢 Пока":
+    elif text == "😢 пока":                           # Исправлено!
         bot.send_message(message.chat.id, "Пока! Заходи ещё! 👋")
         
-    elif text == "🤔 Как дела?":
+    elif text == "🤔 Как делишки?":                   # Исправлено!
         markup = types.InlineKeyboardMarkup(row_width=2)
         btn_yes = types.InlineKeyboardButton("✅ Отлично!", callback_data="good")
         btn_no = types.InlineKeyboardButton("❌ Не очень", callback_data="bad")
