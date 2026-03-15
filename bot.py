@@ -63,7 +63,7 @@ def get_currency_rates():
         r = requests.get(url, timeout=10)
         data = r.json()
         
-        # ТВОЙ СПИСОК ВАЛЮТ (как ты показал)
+        # Твой список валют
         currencies = {
             'AUD': '🇦🇺 Австралийский доллар',
             'AMD': '🇦🇲 Армянский драм',
@@ -123,7 +123,7 @@ def main_keyboard():
         types.KeyboardButton("🌤 Погода"),
         types.KeyboardButton("🎮 Губаты"),
         types.KeyboardButton("🧮 Кальк"),
-        types.KeyboardButton("🌐 Перевод")  # Новая кнопка
+        types.KeyboardButton("🌐 Перевод")
     )
     return markup
 
@@ -161,9 +161,9 @@ def handle(m):
     
     # Режим переводчика
     if user_state.get(uid) == "translate":
-        bot.send_message(uid, translate_text(text))
-        # Не выключаем режим после одного перевода
-        return
+        translation = translate_text(text)
+        bot.send_message(uid, translation, parse_mode="Markdown")
+        return  # Остаёмся в режиме перевода
     
     # Обычные кнопки
     if text == "💰 Курсы":
@@ -207,8 +207,8 @@ def get_weather_city(m):
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
     print("✅ Бот с переводчиком и курсами валют запущен")
-    print("💰 Курсы с количеством (как ты хотел)")
-    print("🌐 Переводчик в отдельном режиме")
+    print("💰 Курсы с количеством")
+    print("🌐 Переводчик работает без выключения")
     
     while True:
         try:
