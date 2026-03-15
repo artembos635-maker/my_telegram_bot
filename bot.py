@@ -90,17 +90,14 @@ def get_currency_rates():
     except:
         return "😕 Не удалось получить курсы"
 
-# ========== КНОПКИ ==========
+# ========== КНОПКИ (ТОЛЬКО НУЖНЫЕ) ==========
 def main_keyboard():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
         types.KeyboardButton("💰 Курсы валют"),
         types.KeyboardButton("🌤 Погода"),
         types.KeyboardButton("🎮 Губаты"),
-        types.KeyboardButton("🧮 Калькулятор"),  # Новая кнопка
-        types.KeyboardButton("👋 Дарово"),
-        types.KeyboardButton("😢 пока"),
-        types.KeyboardButton("🤔 Как делишки?")
+        types.KeyboardButton("🧮 Калькулятор")
     )
     return markup
 
@@ -113,7 +110,6 @@ def start(message):
     bot.send_message(
         message.chat.id,
         f"Привет, {message.from_user.first_name}! 👋\n\n"
-        f"🧮 **Теперь с калькулятором!**\n"
         f"💰 Курсы валют\n"
         f"🌤 Погода\n"
         f"🎮 Губаты — Да/Нет\n"
@@ -167,22 +163,11 @@ def handle_text(message):
             parse_mode="Markdown"
         )
         
-    elif text == "👋 Дарово":
-        bot.send_message(user_id, "Дарово! 😊")
-        
-    elif text == "😢 пока":
-        bot.send_message(user_id, "Пока! 👋")
-        
-    elif text == "🤔 Как делишки?":
-        markup = types.InlineKeyboardMarkup()
-        markup.add(
-            types.InlineKeyboardButton("✅ Отлично", callback_data="good"),
-            types.InlineKeyboardButton("❌ Не очень", callback_data="bad")
-        )
-        bot.send_message(user_id, "У меня всё хорошо! А у тебя?", reply_markup=markup)
-        
     else:
-        bot.send_message(user_id, "Используй кнопки внизу экрана")
+        bot.send_message(
+            user_id,
+            "Используй кнопки внизу экрана: Курсы, Погода, Губаты, Калькулятор"
+        )
 
 # ========== ОБРАБОТКА ВВОДА ГОРОДА ==========
 def process_weather(message):
@@ -191,19 +176,9 @@ def process_weather(message):
     weather = get_weather(city)
     bot.send_message(message.chat.id, weather, parse_mode="Markdown")
 
-# ========== INLINE КНОПКИ ==========
-@bot.callback_query_handler(func=lambda call: True)
-def callback_inline(call):
-    if call.data == "good":
-        bot.send_message(call.message.chat.id, "😊 Отлично! Рад за тебя!")
-    elif call.data == "bad":
-        bot.send_message(call.message.chat.id, "😔 Всё наладится!")
-    bot.answer_callback_query(call.id)
-
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    print("✅ Бот с калькулятором запущен...")
-    print("🧮 Жми 'Калькулятор' и считай!")
+    print("✅ Бот запущен. Кнопки: Курсы, Погода, Губаты, Калькулятор")
     
     while True:
         try:
