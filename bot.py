@@ -46,7 +46,8 @@ def get_currency_rates():
             'PLN': '🇵🇱 PLN', 'UAH': '🇺🇦 UAH', 'CNY': '🇨🇳 CNY',
             'GBP': '🇬🇧 GBP', 'ARS': '🇦🇷 ARS', 'BRL': '🇧🇷 BRL'
         }
-        text = "🇧🇾 Курсы НБРБ\n\n"
+        text = "🇧🇾 Курсы НБРБ\n"
+        text += f"{datetime.now().strftime('%d.%m.%Y')}\n\n"
         for c in data:
             if c['Cur_Abbreviation'] in currencies:
                 name = currencies[c['Cur_Abbreviation']]
@@ -68,26 +69,29 @@ def handle(m):
     uid = m.chat.id
     text = m.text
     
+    # Режимы
     if user_state.get(uid) == "game":
         bot.send_message(uid, "Да" if random.choice([True, False]) else "Нет")
         user_state[uid] = None
         return
-    elif user_state.get(uid) == "calc":
+        
+    if user_state.get(uid) == "calc":
         bot.send_message(uid, calculate(text))
         user_state[uid] = None
         return
     
+    # Кнопки
     if text == "💰 Курсы":
         bot.send_message(uid, get_currency_rates())
     elif text == "🌤 Погода":
-        bot.send_message(uid, "Город:")
-        bot.register_next_step_handler(m, get_weather_city)
+        msg = bot.send_message(uid, "Город?")
+        bot.register_next_step_handler(msg, get_weather_city)
     elif text == "🎮 Губаты":
         user_state[uid] = "game"
         bot.send_message(uid, "Вопрос?")
     elif text == "🧮 Кальк":
         user_state[uid] = "calc"
-        bot.send_message(uid, "Пример:")
+        bot.send_message(uid, "Пример?")
     else:
         bot.send_message(uid, "Жми кнопки")
 
