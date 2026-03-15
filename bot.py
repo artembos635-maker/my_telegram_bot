@@ -9,7 +9,7 @@ TOKEN = '8749955457:AAFrM_9bMzQoT6ibN97Kx5SHHWTKHrS0QRc'
 OPENWEATHER_API_KEY = 'a64845541efe8c1134b338c2c82522ca'
 
 bot = telebot.TeleBot(TOKEN)
-user_state = {}
+user_state = {}  # None, 'game', 'calc'
 
 def calculate(expression):
     try:
@@ -57,41 +57,77 @@ def get_currency_rates():
     except:
         return "😕 Ошибка"
 
+# Клавиатура с кнопкой выключения
+def mode_keyboard():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(types.KeyboardButton("🔴 Выключить Губатого"))
+    return markup
+
+# Обычная клавиатура
+def main_keyboard():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    markup.add(
+        types.KeyboardButton("💰 Курсы"),
+        types.KeyboardButton("🌤 Погода"),
+        types.KeyboardButton("🎮 Губаты"),
+        types.KeyboardButton("🧮 Кальк")
+    )
+    return markup
+
 @bot.message_handler(commands=['start'])
 def start(message):
     user_state[message.chat.id] = None
-    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
-    markup.add("💰 Курсы", "🌤 Погода", "🎮 Губаты", "🧮 Кальк")
-    bot.send_message(message.chat.id, "Выбирай:", reply_markup=markup)
+    bot.send_message(
+        message.chat.id,
+        "Выбирай:",
+        reply_markup=main_keyboard()
+    )
 
 @bot.message_handler(func=lambda m: True)
 def handle(m):
     uid = m.chat.id
     text = m.text
     
-    # Режимы
-    if user_state.get(uid) == "game":
-        bot.send_message(uid, "Да" if random.choice([True, False]) else "Нет")
+    # Кнопка выключения режима
+    if text == "🔴 Выключить Губатого":
         user_state[uid] = None
-        return
-        
-    if user_state.get(uid) == "calc":
-        bot.send_message(uid, calculate(text))
-        user_state[uid] = None
+        bot.send_message(uid, "Режим выключен", reply_markup=main_keyboard())
         return
     
-    # Кнопки
+    # Режим игры
+    if user_state.get(uid) == "game":
+        bot.send_message(uid, "Да" if random.choice([True, False]) else "Нет")
+        return
+        
+    # Режим калькулятора
+    if user_state.get(uid) == "calc":
+        bot.send_message(uid, calculate(text))
+        return
+    
+    # Обычные кнопки
     if text == "💰 Курсы":
         bot.send_message(uid, get_currency_rates())
+        
     elif text == "🌤 Погода":
         msg = bot.send_message(uid, "Город?")
         bot.register_next_step_handler(msg, get_weather_city)
+        
     elif text == "🎮 Губаты":
         user_state[uid] = "game"
-        bot.send_message(uid, "Вопрос?")
+        bot.send_message(
+            uid,
+            "Режим Губаты: пиши вопросы, буду отвечать Да/Нет",
+            reply_markup=mode_keyboard()
+        )
+        
     elif text == "🧮 Кальк":
         user_state[uid] = "calc"
-        bot.send_message(uid, "Пример?")
+        bot.send_message(
+            uid,
+            "Режим Калькулятора: пиши примеры",
+            reply_markup=mode_keyboard()
+        )
+        
     else:
         bot.send_message(uid, "Жми кнопки")
 
@@ -99,7 +135,7 @@ def get_weather_city(m):
     bot.send_message(m.chat.id, get_weather(m.text.strip()))
 
 if __name__ == "__main__":
-    print("✅ Бот работает")
+    print("✅ Бот работает. Режимы не сбрасываются.")
     while True:
         try:
             bot.infinity_polling(timeout=60)
