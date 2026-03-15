@@ -4,12 +4,30 @@ import requests
 from datetime import datetime
 import time
 import random
+import urllib.parse
 
 TOKEN = '8749955457:AAFrM_9bMzQoT6ibN97Kx5SHHWTKHrS0QRc'
 OPENWEATHER_API_KEY = 'a64845541efe8c1134b338c2c82522ca'
 
 bot = telebot.TeleBot(TOKEN)
-user_state = {}  # None, 'game', 'calc'
+user_state = {}  # None, 'game', 'calc', 'translate'
+
+# ========== ПЕРЕВОДЧИК ==========
+def translate_text(text, target_lang='ru'):
+    """Переводит текст на целевой язык (по умолчанию русский)"""
+    try:
+        encoded_text = urllib.parse.quote(text)
+        url = f"https://api.mymemory.translated.net/get?q={encoded_text}&langpair=en|{target_lang}"
+        response = requests.get(url, timeout=10)
+        data = response.json()
+        
+        if response.status_code == 200 and 'responseData' in data:
+            translated = data['responseData']['translatedText']
+            return f"🌐 **Перевод:**\n{translated}"
+        else:
+            return "❌ Не удалось перевести"
+    except Exception as e:
+        return f"😵 Ошибка: {str(e)}"
 
 # ========== КАЛЬКУЛЯТОР ==========
 def calculate(expression):
@@ -45,71 +63,48 @@ def get_currency_rates():
         r = requests.get(url, timeout=10)
         data = r.json()
         
-        # Большой список валют с флагами
+        # ТВОЙ СПИСОК ВАЛЮТ (как ты показал)
         currencies = {
-            'USD': '🇺🇸 Доллар США',
-            'EUR': '🇪🇺 Евро',
-            'RUB': '🇷🇺 Российский рубль',
-            'PLN': '🇵🇱 Польский злотый',
-            'UAH': '🇺🇦 Украинская гривна',
-            'CNY': '🇨🇳 Китайский юань',
-            'GBP': '🇬🇧 Фунт стерлингов',
-            'JPY': '🇯🇵 Японская иена',
-            'CHF': '🇨🇭 Швейцарский франк',
-            'CAD': '🇨🇦 Канадский доллар',
             'AUD': '🇦🇺 Австралийский доллар',
-            'NZD': '🇳🇿 Новозеландский доллар',
-            'SEK': '🇸🇪 Шведская крона',
-            'NOK': '🇳🇴 Норвежская крона',
-            'DKK': '🇩🇰 Датская крона',
-            'ISK': '🇮🇸 Исландская крона',
-            'TRY': '🇹🇷 Турецкая лира',
-            'INR': '🇮🇳 Индийская рупия',
-            'KRW': '🇰🇷 Южнокорейская вона',
-            'ZAR': '🇿🇦 Южноафриканский рэнд',
-            'BRL': '🇧🇷 Бразильский реал',
-            'ARS': '🇦🇷 Аргентинское песо',
-            'MXN': '🇲🇽 Мексиканское песо',
-            'CZK': '🇨🇿 Чешская крона',
-            'HUF': '🇭🇺 Венгерский форинт',
-            'BGN': '🇧🇬 Болгарский лев',
-            'RON': '🇷🇴 Румынский лей',
-            'MDL': '🇲🇩 Молдавский лей',
-            'GEL': '🇬🇪 Грузинский лари',
-            'AZN': '🇦🇿 Азербайджанский манат',
             'AMD': '🇦🇲 Армянский драм',
-            'KZT': '🇰🇿 Казахстанский тенге',
-            'UZS': '🇺🇿 Узбекский сум',
-            'KGS': '🇰🇬 Киргизский сом',
-            'TJS': '🇹🇯 Таджикский сомони',
+            'BRL': '🇧🇷 Бразильский реал',
+            'UAH': '🇺🇦 Украинская гривна',
+            'DKK': '🇩🇰 Датская крона',
             'AED': '🇦🇪 Дирхам ОАЭ',
-            'EGP': '🇪🇬 Египетский фунт',
-            'THB': '🇹🇭 Тайский бат',
+            'USD': '🇺🇸 Доллар США',
             'VND': '🇻🇳 Вьетнамский донг',
-            'IDR': '🇮🇩 Индонезийская рупия',
-            'MYR': '🇲🇾 Малайзийский ринггит',
+            'EUR': '🇪🇺 Евро',
+            'PLN': '🇵🇱 Польский злотый',
+            'JPY': '🇯🇵 Японская иена',
+            'INR': '🇮🇳 Индийская рупия',
+            'ISK': '🇮🇸 Исландская крона',
+            'CAD': '🇨🇦 Канадский доллар',
+            'CNY': '🇨🇳 Китайский юань',
+            'KWD': '🇰🇼 Кувейтский динар',
+            'MDL': '🇲🇩 Молдавский лей',
+            'NZD': '🇳🇿 Новозеландский доллар',
+            'NOK': '🇳🇴 Норвежская крона',
+            'RUB': '🇷🇺 Российский рубль',
             'SGD': '🇸🇬 Сингапурский доллар',
-            'HKD': '🇭🇰 Гонконгский доллар',
-            'ILS': '🇮🇱 Израильский шекель',
-            'SAR': '🇸🇦 Саудовский риял',
-            'KWD': '🇰🇼 Кувейтский динар'
+            'KGS': '🇰🇬 Киргизский сом',
+            'KZT': '🇰🇿 Казахстанский тенге',
+            'TRY': '🇹🇷 Турецкая лира',
+            'GBP': '🇬🇧 Фунт стерлингов',
+            'CZK': '🇨🇿 Чешская крона',
+            'SEK': '🇸🇪 Шведская крона',
+            'CHF': '🇨🇭 Швейцарский франк'
         }
         
         text = "🇧🇾 **Курсы НБРБ**\n"
         text += f"📅 {datetime.now().strftime('%d.%m.%Y')}\n\n"
         
-        found = False
         for c in data:
             code = c['Cur_Abbreviation']
             if code in currencies:
-                found = True
                 name = currencies[code]
                 rate = c['Cur_OfficialRate']
                 scale = c['Cur_Scale']
                 text += f"{name}: {scale} = {rate:.4f} BYN\n"
-        
-        if not found:
-            text += "😕 Валюты не найдены"
         
         return text
     except Exception as e:
@@ -127,7 +122,8 @@ def main_keyboard():
         types.KeyboardButton("💰 Курсы"),
         types.KeyboardButton("🌤 Погода"),
         types.KeyboardButton("🎮 Губаты"),
-        types.KeyboardButton("🧮 Кальк")
+        types.KeyboardButton("🧮 Кальк"),
+        types.KeyboardButton("🌐 Перевод")  # Новая кнопка
     )
     return markup
 
@@ -163,6 +159,12 @@ def handle(m):
         bot.send_message(uid, calculate(text))
         return
     
+    # Режим переводчика
+    if user_state.get(uid) == "translate":
+        bot.send_message(uid, translate_text(text))
+        # Не выключаем режим после одного перевода
+        return
+    
     # Обычные кнопки
     if text == "💰 Курсы":
         bot.send_message(uid, get_currency_rates(), parse_mode="Markdown")
@@ -187,6 +189,14 @@ def handle(m):
             reply_markup=mode_keyboard()
         )
         
+    elif text == "🌐 Перевод":
+        user_state[uid] = "translate"
+        bot.send_message(
+            uid,
+            "🌐 Режим Переводчика: пиши текст на любом языке, переведу на русский",
+            reply_markup=mode_keyboard()
+        )
+        
     else:
         bot.send_message(uid, "Жми кнопки")
 
@@ -196,9 +206,9 @@ def get_weather_city(m):
 
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    print("✅ Бот с большим списком валют запущен")
-    print("💰 Для всех валют показывается количество")
-    print("🎮 Режимы не сбрасываются до нажатия 'Выключить'")
+    print("✅ Бот с переводчиком и курсами валют запущен")
+    print("💰 Курсы с количеством (как ты хотел)")
+    print("🌐 Переводчик в отдельном режиме")
     
     while True:
         try:
