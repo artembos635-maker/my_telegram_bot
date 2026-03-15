@@ -11,27 +11,11 @@ OPENWEATHER_API_KEY = 'a64845541efe8c1134b338c2c82522ca'
 
 bot = telebot.TeleBot(TOKEN)
 
-# ========== ВАРИАНТЫ ОТВЕТОВ ДЛЯ ИГРЫ ==========
-answers = [
-    "Да ✅",
-    "Нет ❌",
-    "100% да! 🔥",
-    "Ага, конечно 😏",
-    "Неа 😅",
-    "Даже не думай",
-    "Возможно... 🤔",
-    "Шансы есть!",
-    "Сомневаюсь",
-    "Губаты говорят — да! 🐱",
-    "Губаты говорят — нет! 😼",
-    "Спроси у Губатого",
-    "Мяу значит да 🐱",
-    "Мяу значит нет 😾"
-    "Иди читайГубаты"
-]
+# Хранилище: кто сейчас в режиме игры
+game_mode = {}
 
-# Храним состояние: ждёт ли бот вопрос от пользователя
-waiting_for_question = {}
+# ========== ВАРИАНТЫ ОТВЕТОВ ДЛЯ ИГРЫ (только Да/Нет) ==========
+# (не используются, но оставим на будущее)
 
 # ========== ФУНКЦИЯ ПОГОДЫ ==========
 def get_weather(city):
@@ -47,16 +31,22 @@ def get_weather(city):
         country = data['sys']['country']
         temp = data['main']['temp']
         feels_like = data['main']['feels_like']
+        humidity = data['main']['humidity']
+        pressure = data['main']['pressure']
+        wind_speed = data['wind']['speed']
         weather_desc = data['weather'][0]['description'].capitalize()
         
         weather_text = f"🌍 **Погода в {city_name}, {country}**\n\n"
         weather_text += f"🌡 **Температура:** {temp:.1f}°C\n"
         weather_text += f"🤔 **Ощущается:** {feels_like:.1f}°C\n"
         weather_text += f"☁️ **{weather_desc}**\n"
+        weather_text += f"💧 **Влажность:** {humidity}%\n"
+        weather_text += f"🌀 **Ветер:** {wind_speed} м/с\n"
+        weather_text += f"📊 **Давление:** {pressure} гПа\n"
         
         return weather_text
-    except:
-        return "😵 Ошибка получения погоды"
+    except Exception as e:
+        return f"😵 Ошибка получения погоды: {str(e)}"
 
 # ========== ФУНКЦИЯ КУРСОВ ==========
 def get_currency_rates():
@@ -68,18 +58,44 @@ def get_currency_rates():
         text = "🇧🇾 **Курсы НБРБ**\n"
         text += f"📅 {datetime.now().strftime('%d.%m.%Y')}\n\n"
         
-        currencies = ['USD', 'EUR', 'RUB']
+        # Словарь валют с флагами (ISO код -> флаг)
+        currencies = {
+            'USD': '🇺🇸 Доллар США',
+            'EUR': '🇪🇺 Евро',
+            'RUB': '🇷🇺 Российский рубль',
+            'PLN': '🇵🇱 Польский злотый',
+            'UAH': '🇺🇦 Украинская гривна',
+            'CNY': '🇨🇳 Китайский юань',
+            'GBP': '🇬🇧 Фунт стерлингов',
+            'JPY': '🇯🇵 Японская иена',
+            'CHF': '🇨🇭 Швейцарский франк',
+            'CAD': '🇨🇦 Канадский доллар',
+            'AUD': '🇦🇺 Австралийский доллар',
+            'ARS': '🇦🇷 Аргентинское песо',
+            'BRL': '🇧🇷 Бразильский реал',
+            'MXN': '🇲🇽 Мексиканское песо',
+            'TRY': '🇹🇷 Турецкая лира',
+            'INR': '🇮🇳 Индийская рупия',
+            'KRW': '🇰🇷 Южнокорейская вона',
+            'ZAR': '🇿🇦 Южноафриканский рэнд'
+        }
         
+        found = False
         for currency in data:
-            if currency['Cur_Abbreviation'] in currencies:
-                name = currency['Cur_Abbreviation']
+            code = currency['Cur_Abbreviation']
+            if code in currencies:
+                found = True
+                name = currencies[code]
                 rate = currency['Cur_OfficialRate']
                 scale = currency['Cur_Scale']
-                text += f"{scale} {name} = {rate:.4f} BYN\n"
+                text += f"{name}: {scale} = {rate:.4f} BYN\n"
+        
+        if not found:
+            text += "😕 Валюты не найдены"
         
         return text
-    except:
-        return "😕 Не удалось получить курсы"
+    except Exception as e:
+        return f"😕 Не удалось получить курсы: {str(e)}"
 
 # ========== КНОПКИ ==========
 def main_keyboard():
@@ -87,7 +103,7 @@ def main_keyboard():
     markup.add(
         types.KeyboardButton("💰 Курсы валют"),
         types.KeyboardButton("🌤 Погода"),
-        types.KeyboardButton("🎮 Губаты"),  # Кнопка игры
+        types.KeyboardButton("🎮 Губаты"),
         types.KeyboardButton("👋 Дарово"),
         types.KeyboardButton("😢 пока"),
         types.KeyboardButton("🤔 Как делишки?")
@@ -98,13 +114,15 @@ def main_keyboard():
 @bot.message_handler(commands=['start'])
 def start(message):
     user_id = message.chat.id
-    waiting_for_question[user_id] = False  # Сбрасываем состояние
+    game_mode[user_id] = False  # Сбрасываем режим игры
     
     bot.send_message(
         message.chat.id,
         f"Привет, {message.from_user.first_name}! 👋\n\n"
-        f"🎮 Новая кнопка **'Губаты'** — жми и задавай вопрос!\n"
-        f"Я отвечу Да или Нет 😄",
+        f"🇧🇾 **Курсы валют НБРБ** с флагами стран!\n"
+        f"🌤 Погода в любом городе\n"
+        f"🎮 Губаты — задай вопрос и получи Да/Нет\n\n"
+        f"Нажимай кнопки внизу!",
         reply_markup=main_keyboard(),
         parse_mode="Markdown"
     )
@@ -115,25 +133,17 @@ def handle_text(message):
     user_id = message.chat.id
     text = message.text
     
-    # Если ждём вопрос от пользователя
-    if waiting_for_question.get(user_id, False):
-        # Получаем вопрос и отвечаем
-        question = text
-        answer = random.choice(answers)  # Случайный ответ
-        
-        bot.send_message(
-            user_id,
-            f"❓ Твой вопрос: {question}\n\n"
-            f"🎱 **Губаты говорят:** {answer}",
-            parse_mode="Markdown"
-        )
-        
-        # Сбрасываем состояние
-        waiting_for_question[user_id] = False
+    # Если пользователь в режиме игры — отвечаем Да/Нет
+    if game_mode.get(user_id, False):
+        # Случайный ответ: только Да или Нет
+        answer = "Да ✅" if random.choice([True, False]) else "Нет ❌"
+        bot.send_message(user_id, answer)
+        game_mode[user_id] = False  # Выключаем режим игры
         return
     
     # Обычные кнопки
     if text == "💰 Курсы валют":
+        bot.send_chat_action(user_id, 'typing')
         rates = get_currency_rates()
         bot.send_message(user_id, rates, parse_mode="Markdown")
         
@@ -146,16 +156,11 @@ def handle_text(message):
         bot.register_next_step_handler(message, process_weather)
         
     elif text == "🎮 Губаты":
-        # Включаем режим ожидания вопроса
-        waiting_for_question[user_id] = True
+        # Включаем режим игры
+        game_mode[user_id] = True
         bot.send_message(
             user_id,
-            "🤔 **Напиши свой шуточный вопрос**, а я отвечу Да или Нет!\n\n"
-            "Например:\n"
-            "• Я сегодня выиграю в Brawl Stars?\n"
-            "• Губаты меня любят?\n"
-            "• Стоит ли идти гулять?",
-            parse_mode="Markdown"
+            "Задай шуточный вопрос:"
         )
         
     elif text == "👋 Дарово":
@@ -170,7 +175,11 @@ def handle_text(message):
             types.InlineKeyboardButton("✅ Отлично", callback_data="good"),
             types.InlineKeyboardButton("❌ Не очень", callback_data="bad")
         )
-        bot.send_message(user_id, "У меня всё хорошо! А у тебя?", reply_markup=markup)
+        bot.send_message(
+            user_id,
+            "У меня всё хорошо! А у тебя?",
+            reply_markup=markup
+        )
         
     else:
         bot.send_message(
@@ -191,13 +200,14 @@ def callback_inline(call):
     if call.data == "good":
         bot.send_message(call.message.chat.id, "😊 Отлично! Рад за тебя!")
     elif call.data == "bad":
-        bot.send_message(call.message.chat.id, "😔 Всё наладится!")
+        bot.send_message(call.message.chat.id, "😔 Не расстраивайся! Всё наладится!")
     bot.answer_callback_query(call.id)
 
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    print("✅ Бот с игрой 'Губаты' запущен...")
-    print("🎮 Жми кнопку 'Губаты' и задавай вопросы!")
+    print("✅ Бот с флагами валют и игрой 'Губаты' запущен...")
+    print("🇧🇾 Курсы НБРБ с флагами стран")
+    print("🎮 Губаты: кнопка → вопрос → Да/Нет")
     
     while True:
         try:
