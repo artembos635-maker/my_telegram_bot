@@ -11,6 +11,7 @@ OPENWEATHER_API_KEY = 'a64845541efe8c1134b338c2c82522ca'
 bot = telebot.TeleBot(TOKEN)
 user_state = {}  # None, 'game', 'calc'
 
+# ========== КАЛЬКУЛЯТОР ==========
 def calculate(expression):
     try:
         allowed = set('0123456789+-*/.() ')
@@ -23,6 +24,7 @@ def calculate(expression):
     except:
         return "❌ Ошибка"
 
+# ========== ПОГОДА ==========
 def get_weather(city):
     try:
         url = f"https://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHER_API_KEY}&units=metric&lang=ru"
@@ -36,34 +38,89 @@ def get_weather(city):
     except:
         return "😵 Ошибка"
 
+# ========== КУРСЫ ВАЛЮТ (С КОЛИЧЕСТВОМ) ==========
 def get_currency_rates():
     try:
         url = "https://api.nbrb.by/exrates/rates?periodicity=0"
         r = requests.get(url, timeout=10)
         data = r.json()
+        
+        # Большой список валют с флагами
         currencies = {
-            'USD': '🇺🇸 USD', 'EUR': '🇪🇺 EUR', 'RUB': '🇷🇺 RUB',
-            'PLN': '🇵🇱 PLN', 'UAH': '🇺🇦 UAH', 'CNY': '🇨🇳 CNY',
-            'GBP': '🇬🇧 GBP', 'ARS': '🇦🇷 ARS', 'BRL': '🇧🇷 BRL'
+            'USD': '🇺🇸 Доллар США',
+            'EUR': '🇪🇺 Евро',
+            'RUB': '🇷🇺 Российский рубль',
+            'PLN': '🇵🇱 Польский злотый',
+            'UAH': '🇺🇦 Украинская гривна',
+            'CNY': '🇨🇳 Китайский юань',
+            'GBP': '🇬🇧 Фунт стерлингов',
+            'JPY': '🇯🇵 Японская иена',
+            'CHF': '🇨🇭 Швейцарский франк',
+            'CAD': '🇨🇦 Канадский доллар',
+            'AUD': '🇦🇺 Австралийский доллар',
+            'NZD': '🇳🇿 Новозеландский доллар',
+            'SEK': '🇸🇪 Шведская крона',
+            'NOK': '🇳🇴 Норвежская крона',
+            'DKK': '🇩🇰 Датская крона',
+            'ISK': '🇮🇸 Исландская крона',
+            'TRY': '🇹🇷 Турецкая лира',
+            'INR': '🇮🇳 Индийская рупия',
+            'KRW': '🇰🇷 Южнокорейская вона',
+            'ZAR': '🇿🇦 Южноафриканский рэнд',
+            'BRL': '🇧🇷 Бразильский реал',
+            'ARS': '🇦🇷 Аргентинское песо',
+            'MXN': '🇲🇽 Мексиканское песо',
+            'CZK': '🇨🇿 Чешская крона',
+            'HUF': '🇭🇺 Венгерский форинт',
+            'BGN': '🇧🇬 Болгарский лев',
+            'RON': '🇷🇴 Румынский лей',
+            'MDL': '🇲🇩 Молдавский лей',
+            'GEL': '🇬🇪 Грузинский лари',
+            'AZN': '🇦🇿 Азербайджанский манат',
+            'AMD': '🇦🇲 Армянский драм',
+            'KZT': '🇰🇿 Казахстанский тенге',
+            'UZS': '🇺🇿 Узбекский сум',
+            'KGS': '🇰🇬 Киргизский сом',
+            'TJS': '🇹🇯 Таджикский сомони',
+            'AED': '🇦🇪 Дирхам ОАЭ',
+            'EGP': '🇪🇬 Египетский фунт',
+            'THB': '🇹🇭 Тайский бат',
+            'VND': '🇻🇳 Вьетнамский донг',
+            'IDR': '🇮🇩 Индонезийская рупия',
+            'MYR': '🇲🇾 Малайзийский ринггит',
+            'SGD': '🇸🇬 Сингапурский доллар',
+            'HKD': '🇭🇰 Гонконгский доллар',
+            'ILS': '🇮🇱 Израильский шекель',
+            'SAR': '🇸🇦 Саудовский риял',
+            'KWD': '🇰🇼 Кувейтский динар'
         }
-        text = "🇧🇾 Курсы НБРБ\n"
-        text += f"{datetime.now().strftime('%d.%m.%Y')}\n\n"
+        
+        text = "🇧🇾 **Курсы НБРБ**\n"
+        text += f"📅 {datetime.now().strftime('%d.%m.%Y')}\n\n"
+        
+        found = False
         for c in data:
-            if c['Cur_Abbreviation'] in currencies:
-                name = currencies[c['Cur_Abbreviation']]
+            code = c['Cur_Abbreviation']
+            if code in currencies:
+                found = True
+                name = currencies[code]
                 rate = c['Cur_OfficialRate']
-                text += f"{name}: {rate:.4f} BYN\n"
+                scale = c['Cur_Scale']
+                text += f"{name}: {scale} = {rate:.4f} BYN\n"
+        
+        if not found:
+            text += "😕 Валюты не найдены"
+        
         return text
-    except:
-        return "😕 Ошибка"
+    except Exception as e:
+        return f"😕 Ошибка: {str(e)}"
 
-# Клавиатура с кнопкой выключения
+# ========== КЛАВИАТУРЫ ==========
 def mode_keyboard():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(types.KeyboardButton("🔴 Выключить Губатого"))
     return markup
 
-# Обычная клавиатура
 def main_keyboard():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
     markup.add(
@@ -74,6 +131,7 @@ def main_keyboard():
     )
     return markup
 
+# ========== СТАРТ ==========
 @bot.message_handler(commands=['start'])
 def start(message):
     user_state[message.chat.id] = None
@@ -83,6 +141,7 @@ def start(message):
         reply_markup=main_keyboard()
     )
 
+# ========== ОБРАБОТКА СООБЩЕНИЙ ==========
 @bot.message_handler(func=lambda m: True)
 def handle(m):
     uid = m.chat.id
@@ -106,7 +165,7 @@ def handle(m):
     
     # Обычные кнопки
     if text == "💰 Курсы":
-        bot.send_message(uid, get_currency_rates())
+        bot.send_message(uid, get_currency_rates(), parse_mode="Markdown")
         
     elif text == "🌤 Погода":
         msg = bot.send_message(uid, "Город?")
@@ -116,7 +175,7 @@ def handle(m):
         user_state[uid] = "game"
         bot.send_message(
             uid,
-            "Режим Губаты: пиши вопросы, буду отвечать Да/Нет",
+            "🎮 Режим Губаты: пиши вопросы, буду отвечать Да/Нет",
             reply_markup=mode_keyboard()
         )
         
@@ -124,20 +183,26 @@ def handle(m):
         user_state[uid] = "calc"
         bot.send_message(
             uid,
-            "Режим Калькулятора: пиши примеры",
+            "🧮 Режим Калькулятора: пиши примеры",
             reply_markup=mode_keyboard()
         )
         
     else:
         bot.send_message(uid, "Жми кнопки")
 
+# ========== ПОЛУЧЕНИЕ ПОГОДЫ ПОСЛЕ ВВОДА ГОРОДА ==========
 def get_weather_city(m):
     bot.send_message(m.chat.id, get_weather(m.text.strip()))
 
+# ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    print("✅ Бот работает. Режимы не сбрасываются.")
+    print("✅ Бот с большим списком валют запущен")
+    print("💰 Для всех валют показывается количество")
+    print("🎮 Режимы не сбрасываются до нажатия 'Выключить'")
+    
     while True:
         try:
             bot.infinity_polling(timeout=60)
-        except:
+        except Exception as e:
+            print(f"Ошибка: {e}")
             time.sleep(5)
