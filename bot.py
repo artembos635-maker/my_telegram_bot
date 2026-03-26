@@ -12,9 +12,15 @@ OPENWEATHER_API_KEY = 'a64845541efe8c1134b338c2c82522ca'
 bot = telebot.TeleBot(TOKEN)
 user_state = {}  # None, 'game', 'calc', 'translate'
 
+# ========== КОМАНДА /67 ==========
+@bot.message_handler(commands=['67'])
+def send_67(message):
+    for i in range(67):
+        bot.send_message(message.chat.id, "six seven")
+        # Без задержки
+
 # ========== ПЕРЕВОДЧИК ==========
 def translate_text(text, target_lang='ru'):
-    """Переводит текст на целевой язык (по умолчанию русский)"""
     try:
         encoded_text = urllib.parse.quote(text)
         url = f"https://api.mymemory.translated.net/get?q={encoded_text}&langpair=en|{target_lang}"
@@ -56,14 +62,13 @@ def get_weather(city):
     except:
         return "😵 Ошибка"
 
-# ========== КУРСЫ ВАЛЮТ (С КОЛИЧЕСТВОМ) ==========
+# ========== КУРСЫ ВАЛЮТ ==========
 def get_currency_rates():
     try:
         url = "https://api.nbrb.by/exrates/rates?periodicity=0"
         r = requests.get(url, timeout=10)
         data = r.json()
         
-        # Твой список валют
         currencies = {
             'AUD': '🇦🇺 Австралийский доллар',
             'AMD': '🇦🇲 Армянский драм',
@@ -143,29 +148,24 @@ def handle(m):
     uid = m.chat.id
     text = m.text
     
-    # Кнопка выключения режима
     if text == "🔴 Выключить Губатого":
         user_state[uid] = None
         bot.send_message(uid, "Режим выключен", reply_markup=main_keyboard())
         return
     
-    # Режим игры
     if user_state.get(uid) == "game":
         bot.send_message(uid, "Да" if random.choice([True, False]) else "Нет")
         return
         
-    # Режим калькулятора
     if user_state.get(uid) == "calc":
         bot.send_message(uid, calculate(text))
         return
     
-    # Режим переводчика
     if user_state.get(uid) == "translate":
         translation = translate_text(text)
         bot.send_message(uid, translation, parse_mode="Markdown")
-        return  # Остаёмся в режиме перевода
+        return
     
-    # Обычные кнопки
     if text == "💰 Курсы":
         bot.send_message(uid, get_currency_rates(), parse_mode="Markdown")
         
@@ -200,15 +200,12 @@ def handle(m):
     else:
         bot.send_message(uid, "Жми кнопки")
 
-# ========== ПОЛУЧЕНИЕ ПОГОДЫ ПОСЛЕ ВВОДА ГОРОДА ==========
 def get_weather_city(m):
     bot.send_message(m.chat.id, get_weather(m.text.strip()))
 
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    print("✅ Бот с переводчиком и курсами валют запущен")
-    print("💰 Курсы с количеством")
-    print("🌐 Переводчик работает без выключения")
+    print("✅ Бот запущен. Команда /67 отправляет 67 сообщений 'six seven'")
     
     while True:
         try:
