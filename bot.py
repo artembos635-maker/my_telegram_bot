@@ -2,17 +2,15 @@ import telebot
 from telebot import types
 import requests
 import time
-import random
 import os
 import json
 
 TOKEN = '8749955457:AAFrM_9bMzQoT6ibN97Kx5SHHWTKHrS0QRc'
-DEEPSEEK_API_KEY = 'sk-56c80180bec2464b85903cf518bc1c13'  # 🔑 НОВЫЙ КЛЮЧ
+OPENROUTER_API_KEY = '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'
 ADMIN_ID = 8749955457
 
 bot = telebot.TeleBot(TOKEN)
 user_state = {}
-
 USERS_FILE = 'users.json'
 
 def save_user(user_id, first_name, username):
@@ -40,6 +38,35 @@ def get_all_users():
             return json.load(f)
     except:
         return []
+
+def ask_ai(msg, name):
+    """Запрос к OpenRouter (DeepSeek)"""
+    try:
+        response = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "deepseek/deepseek-chat",
+                "messages": [
+                    {"role": "system", "content": f"Ты дружелюбный помощник по имени Губаты. Общаешься с {name}. Отвечай кратко и дружелюбно."},
+                    {"role": "user", "content": msg}
+                ],
+                "max_tokens": 500
+            },
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            return f"😕 Ошибка API: {response.status_code}"
+        
+        data = response.json()
+        return data['choices'][0]['message']['content']
+        
+    except Exception as e:
+        return f"😵 Ошибка: {e}"
 
 @bot.message_handler(commands=['67'])
 def send_67(message):
@@ -92,32 +119,18 @@ def broadcast(message):
             fail += 1
     bot.send_message(message.chat.id, f"✅ Отправлено: {ok}\n❌ Не доставлено: {fail}")
 
-def ask_deepseek(msg, name):
-    try:
-        url = "https://api.deepseek.com/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
-        payload = {
-            "model": "deepseek-chat",
-            "messages": [
-                {"role": "system", "content": f"Ты Губаты. Общаешься с {name}. Отвечай кратко."},
-                {"role": "user", "content": msg}
-            ],
-            "max_tokens": 500
-        }
-        r = requests.post(url, headers=headers, json=payload, timeout=30)
-        if r.status_code != 200:
-            return f"😕 Ошибка {r.status_code}"
-        return r.json()['choices'][0]['message']['content']
-    except Exception as e:
-        return f"😵 Ошибка: {e}"
-
 @bot.message_handler(commands=['start'])
 def start(message):
     save_user(message.chat.id, message.from_user.first_name, message.from_user.username)
     user_state[message.chat.id] = None
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(types.KeyboardButton("🤖 Начать чат"))
-    bot.send_message(message.chat.id, f"Привет, {message.from_user.first_name}! Нажми кнопку чтобы начать.", reply_markup=markup)
+    bot.send_message(
+        message.chat.id,
+        f"Привет, {message.from_user.first_name}! 👋\n\n"
+        f"Я Губаты. Нажми '🤖 Начать чат' чтобы поговорить со мной.",
+        reply_markup=markup
+    )
 
 @bot.message_handler(func=lambda m: True)
 def handle(m):
@@ -133,7 +146,7 @@ def handle(m):
     
     if user_state.get(uid) == "chat":
         bot.send_chat_action(uid, 'typing')
-        ans = ask_deepseek(txt, m.from_user.first_name)
+        ans = ask_ai(txt, m.from_user.first_name)
         bot.send_message(uid, ans)
         return
     
@@ -144,10 +157,10 @@ def handle(m):
         bot.send_message(uid, "🤖 Режим чата включён! Пиши сообщения.", reply_markup=markup)
         return
     
-    bot.send_message(uid, "Нажми '🤖 Начать чат'")
+    bot.send_message(uid, "Нажми '🤖 Начать чат' чтобы общаться")
 
 if __name__ == "__main__":
-    print("✅ Бот запущен с новым ключом DeepSeek")
+    print("✅ Бот с OpenRouter запущен")
     while True:
         try:
             bot.infinity_polling(timeout=60)
