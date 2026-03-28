@@ -1,4 +1,5 @@
 import telebot
+from telebot import types
 import requests
 from datetime import datetime
 import time
@@ -103,102 +104,118 @@ user_game_mode = {}
 
 def start_game(chat_id):
     user_game_mode[chat_id] = True
-    return "🎮 Игра Губаты! Задавай вопросы, я отвечаю Да/Нет. Выход: /stop"
+    return "🎮 Игра Губаты! Задавай вопросы, я отвечаю Да/Нет. Нажми 'Выход' чтобы закончить."
 
 def stop_game(chat_id):
     user_game_mode[chat_id] = False
-    return "🎮 Игра завершена. /help — список команд"
+    return "🎮 Игра завершена. Нажми /start для главного меню."
 
 def play_game(question):
     answers = ["Да ✅", "Нет ❌"]
     return random.choice(answers)
 
-# ========== КОМАНДА HELP ==========
-def show_help():
-    return (
-        "📋 **Команды:**\n\n"
-        "🇧🇾 **/val** — курсы валют\n"
-        "🧮 **/kal** — калькулятор (пример: /kal 2+2)\n"
-        "🌐 **/tran** — перевод (пример: /tran Hello)\n"
-        "🎮 **/gubati** — игра Да/Нет\n"
-        "🛑 **/stop** — выйти из игры\n"
-        "❓ **/help** — этот список"
+# ========== КЛАВИАТУРА ==========
+def main_keyboard():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=2)
+    markup.add(
+        types.KeyboardButton("💰 Курсы"),
+        types.KeyboardButton("🧮 Калькулятор"),
+        types.KeyboardButton("🌐 Перевод"),
+        types.KeyboardButton("🎮 Губаты"),
+        types.KeyboardButton("❓ Помощь")
     )
+    return markup
 
-# ========== КОМАНДЫ ==========
-@bot.message_handler(commands=['start'])
-def start(message):
-    save_user(message.chat.id, message.from_user.first_name, message.from_user.username)
-    bot.send_message(
-        message.chat.id,
-        f"Привет, {message.from_user.first_name}! 👋\n\n"
-        f"Напиши **/help** для списка команд"
-    )
+def game_keyboard():
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    markup.add(types.KeyboardButton("🚪 Выход"))
+    return markup
 
-@bot.message_handler(commands=['help'])
-def help_command(message):
-    bot.send_message(message.chat.id, show_help(), parse_mode="Markdown")
-
-@bot.message_handler(commands=['val'])
-def val(message):
-    bot.send_message(message.chat.id, get_currency_rates(), parse_mode="Markdown")
-
-@bot.message_handler(commands=['kal'])
-def kal(message):
-    parts = message.text.split(maxsplit=1)
-    if len(parts) < 2:
-        bot.send_message(message.chat.id, "❌ Пример: /kal 2+2")
-        return
-    expr = parts[1]
-    bot.send_message(message.chat.id, calculate(expr))
-
-@bot.message_handler(commands=['tran'])
-def tran(message):
-    parts = message.text.split(maxsplit=1)
-    if len(parts) < 2:
-        bot.send_message(message.chat.id, "❌ Пример: /tran Hello")
-        return
-    text = parts[1]
-    bot.send_chat_action(message.chat.id, 'typing')
-    bot.send_message(message.chat.id, translate_text(text))
-
-@bot.message_handler(commands=['gubati'])
-def gubati(message):
-    chat_id = message.chat.id
-    bot.send_message(chat_id, start_game(chat_id))
-
-@bot.message_handler(commands=['stop'])
-def stop(message):
-    chat_id = message.chat.id
-    bot.send_message(chat_id, stop_game(chat_id))
-
+# ========== КОМАНДА /67 (секретная) ==========
 @bot.message_handler(commands=['67'])
 def secret_67(message):
     for i in range(67):
         bot.send_message(message.chat.id, "six seven")
         time.sleep(0.05)
 
-# ========== НЕИЗВЕСТНЫЕ КОМАНДЫ ==========
-@bot.message_handler(func=lambda m: m.text and m.text.startswith('/'))
-def unknown(message):
-    bot.send_message(message.chat.id, show_help(), parse_mode="Markdown")
+# ========== КОМАНДА /start ==========
+@bot.message_handler(commands=['start'])
+def start(message):
+    save_user(message.chat.id, message.from_user.first_name, message.from_user.username)
+    user_game_mode[message.chat.id] = False
+    bot.send_message(
+        message.chat.id,
+        f"Привет, {message.from_user.first_name}! 👋\n\n"
+        f"Нажимай кнопки внизу экрана!",
+        reply_markup=main_keyboard()
+    )
 
-# ========== ОБЫЧНЫЕ СООБЩЕНИЯ ==========
+# ========== ОБРАБОТКА КНОПОК ==========
 @bot.message_handler(func=lambda m: True)
-def handle(message):
+def handle_buttons(message):
     chat_id = message.chat.id
+    text = message.text
     
+    # Режим игры
     if user_game_mode.get(chat_id, False):
-        if message.text.startswith('/'):
-            return
-        bot.send_message(chat_id, play_game(message.text))
+        if text == "🚪 Выход":
+            bot.send_message(chat_id, stop_game(chat_id), reply_markup=main_keyboard())
+        else:
+            bot.send_message(chat_id, play_game(text))
+        return
+    
+    # Обычные кнопки
+    if text == "💰 Курсы":
+        bot.send_message(chat_id, get_currency_rates(), parse_mode="Markdown")
+        
+    elif text == "🧮 Калькулятор":
+        msg = bot.send_message(chat_id, "🧮 Введи пример:\n(например: 2+2 или 10*5)")
+        bot.register_next_step_handler(msg, calc_handler)
+        
+    elif text == "🌐 Перевод":
+        msg = bot.send_message(chat_id, "🌐 Введи текст для перевода на русский:")
+        bot.register_next_step_handler(msg, translate_handler)
+        
+    elif text == "🎮 Губаты":
+        user_game_mode[chat_id] = True
+        bot.send_message(chat_id, start_game(chat_id), reply_markup=game_keyboard())
+        
+    elif text == "❓ Помощь":
+        bot.send_message(
+            chat_id,
+            "📋 **Команды и кнопки:**\n\n"
+            "💰 **Курсы** — курсы валют НБРБ\n"
+            "🧮 **Калькулятор** — введи пример (2+2, 10*5)\n"
+            "🌐 **Перевод** — переведу любой текст на русский\n"
+            "🎮 **Губаты** — игра Да/Нет, задавай вопросы\n"
+            "🚪 **Выход** — выйти из игры\n\n"
+            "🔹 /67 — секретная команда",
+            parse_mode="Markdown"
+        )
     else:
-        bot.send_message(chat_id, show_help(), parse_mode="Markdown")
+        bot.send_message(chat_id, "Используй кнопки внизу экрана!", reply_markup=main_keyboard())
+
+# ========== ОБРАБОТЧИКИ ДЛЯ КАЛЬКУЛЯТОРА И ПЕРЕВОДА ==========
+def calc_handler(message):
+    chat_id = message.chat.id
+    expr = message.text.strip()
+    if expr == "/cancel":
+        bot.send_message(chat_id, "❌ Отменено", reply_markup=main_keyboard())
+        return
+    bot.send_message(chat_id, calculate(expr), reply_markup=main_keyboard())
+
+def translate_handler(message):
+    chat_id = message.chat.id
+    text = message.text.strip()
+    if text == "/cancel":
+        bot.send_message(chat_id, "❌ Отменено", reply_markup=main_keyboard())
+        return
+    bot.send_chat_action(chat_id, 'typing')
+    bot.send_message(chat_id, translate_text(text), reply_markup=main_keyboard())
 
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    print("✅ Бот Губаты запущен!")
-    print("Команды: /val, /kal, /tran, /gubati, /stop, /help, /67")
+    print("✅ Бот Губаты с кнопками запущен!")
     while True:
         try:
             bot.infinity_polling(timeout=60)
