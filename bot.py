@@ -39,7 +39,6 @@ def add_user(user_id, name, username):
 
 # ------------------ КНОПКИ ------------------
 def start_keyboard():
-    """Клавиатура с кнопкой-ссылкой"""
     markup = types.InlineKeyboardMarkup()
     btn = types.InlineKeyboardButton(
         text="🌿 БАДы", 
@@ -101,6 +100,9 @@ def broadcast(message):
         bot.send_message(message.chat.id, "📭 Нет пользователей")
         return
     
+    # Текст с подписью "Модератор"
+    broadcast_text = f"🛡️ **Сообщение от модератора:**\n\n{text}"
+    
     bot.send_message(message.chat.id, f"📢 Рассылка {len(users)} пользователям...")
     
     ok = 0
@@ -108,8 +110,7 @@ def broadcast(message):
     
     for u in users:
         try:
-            # Можно и с кнопкой в рассылке, если нужно
-            bot.send_message(u['id'], f"📢 {text}")
+            bot.send_message(u['id'], broadcast_text, parse_mode="Markdown")
             ok += 1
             time.sleep(0.05)
         except:
@@ -122,7 +123,7 @@ def broadcast(message):
 
 # ------------------ ЗАПУСК ------------------
 if __name__ == "__main__":
-    print("✅ Бот Badiworldbot запущен с кнопкой 'БАДы'")
+    print("✅ Бот Badiworldbot запущен")
     print(f"Админ: {ADMIN_ID}")
     print(f"Пользователей: {len(get_users())}")
     
