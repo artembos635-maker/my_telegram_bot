@@ -9,7 +9,7 @@ import json
 import os
 
 TOKEN = '8749955457:AAFrM_9bMzQoT6ibN97Kx5SHHWTKHrS0QRc'
-OPENROUTER_API_KEY = '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'
+DEEPSEEK_API_KEY = 'sk-56c80180bec2464b85903cf518bc1c13'  # твой старый ключ DeepSeek
 ADMIN_ID = 8749955457
 
 bot = telebot.TeleBot(TOKEN)
@@ -44,17 +44,17 @@ def get_all_users():
     except:
         return []
 
-# ========== ИИ (OPENROUTER) ==========
-def ask_ai(msg, name):
+# ========== ИИ (DEEPSEEK) ==========
+def ask_deepseek(msg, name):
     try:
         response = requests.post(
-            url="https://openrouter.ai/api/v1/chat/completions",
+            url="https://api.deepseek.com/v1/chat/completions",
             headers={
-                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
                 "Content-Type": "application/json"
             },
             json={
-                "model": "mistralai/mistral-7b-instruct",
+                "model": "deepseek-chat",
                 "messages": [
                     {"role": "system", "content": f"Ты дружелюбный помощник по имени Губаты. Общаешься с {name}. Отвечай кратко и дружелюбно."},
                     {"role": "user", "content": msg}
@@ -212,7 +212,7 @@ def handle_buttons(message):
             bot.send_message(chat_id, stop_ai(chat_id), reply_markup=main_keyboard())
         else:
             bot.send_chat_action(chat_id, 'typing')
-            answer = ask_ai(text, message.from_user.first_name)
+            answer = ask_deepseek(text, message.from_user.first_name)
             bot.send_message(chat_id, answer)
         return
     
@@ -264,8 +264,7 @@ def translate_handler(message):
 
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    print("✅ Бот Губаты с ИИ и кнопками запущен!")
-    print("🤖 Использует Mistral 7B (бесплатно)")
+    print("✅ Бот Губаты с DeepSeek и кнопками запущен!")
     while True:
         try:
             bot.infinity_polling(timeout=60)
