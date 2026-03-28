@@ -9,13 +9,13 @@ import json
 import os
 
 TOKEN = '8749955457:AAFrM_9bMzQoT6ibN97Kx5SHHWTKHrS0QRc'
-OPENROUTER_API_KEY = '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'
+OPENROUTER_API_KEY = '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'
 ADMIN_ID = 8749955457
 
 bot = telebot.TeleBot(TOKEN)
 USERS_FILE = 'users.json'
-user_game_mode = {}  # для игры
-user_ai_mode = {}    # для ИИ
+user_game_mode = {}
+user_ai_mode = {}
 
 # ========== СОХРАНЕНИЕ ПОЛЬЗОВАТЕЛЕЙ ==========
 def save_user(user_id, first_name, username):
@@ -250,21 +250,15 @@ def handle_buttons(message):
     else:
         bot.send_message(chat_id, "Используй кнопки внизу экрана!", reply_markup=main_keyboard())
 
-# ========== ОБРАБОТЧИКИ ДЛЯ КАЛЬКУЛЯТОРА И ПЕРЕВОДА ==========
+# ========== ОБРАБОТЧИКИ ==========
 def calc_handler(message):
     chat_id = message.chat.id
     expr = message.text.strip()
-    if expr == "/cancel":
-        bot.send_message(chat_id, "❌ Отменено", reply_markup=main_keyboard())
-        return
     bot.send_message(chat_id, calculate(expr), reply_markup=main_keyboard())
 
 def translate_handler(message):
     chat_id = message.chat.id
     text = message.text.strip()
-    if text == "/cancel":
-        bot.send_message(chat_id, "❌ Отменено", reply_markup=main_keyboard())
-        return
     bot.send_chat_action(chat_id, 'typing')
     bot.send_message(chat_id, translate_text(text), reply_markup=main_keyboard())
 
