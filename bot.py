@@ -1,15 +1,16 @@
 import telebot
+from telebot import types
 import json
 import os
 import time
 
 TOKEN = '8786806064:AAGnZbQeNQCow4txVsS_O_-BQkDLkARk6RU'
-ADMIN_ID = 7717477509  # твой Telegram ID
+ADMIN_ID = 7717477509
 
 bot = telebot.TeleBot(TOKEN)
 USERS_FILE = 'users.json'
 
-# ========== РАБОТА С ПОЛЬЗОВАТЕЛЯМИ ==========
+# ------------------ РАБОТА С ПОЛЬЗОВАТЕЛЯМИ ------------------
 def get_users():
     try:
         if not os.path.exists(USERS_FILE):
@@ -36,33 +37,29 @@ def add_user(user_id, name, username):
     save_users(users)
     return True
 
-# ========== КОМАНДЫ ==========
+# ------------------ КНОПКИ ------------------
+def start_keyboard():
+    """Клавиатура с кнопкой-ссылкой"""
+    markup = types.InlineKeyboardMarkup()
+    btn = types.InlineKeyboardButton(
+        text="🌿 БАДы", 
+        url="https://nspgoods.by/bady/"
+    )
+    markup.add(btn)
+    return markup
+
+# ------------------ КОМАНДЫ ------------------
 @bot.message_handler(commands=['start'])
 def start(message):
     add_user(message.chat.id, message.from_user.first_name, message.from_user.username)
     bot.send_message(
         message.chat.id,
         f"Привет, {message.from_user.first_name}! 👋\n\n"
-        f"Это бот про БАДы.\n\n"
-        f"Команды:\n"
-        f"/help — список команд"
+        f"Я бот о биологически активных добавках.\n"
+        f"Нажми на кнопку, чтобы перейти в каталог.",
+        reply_markup=start_keyboard()
     )
 
-@bot.message_handler(commands=['help'])
-def help_command(message):
-    bot.send_message(
-        message.chat.id,
-        "📋 **Команды:**\n\n"
-        "🔹 /start — начать\n"
-        "🔹 /help — помощь\n\n"
-        "**Только для админа:**\n"
-        "🔹 /broadcast [текст] — рассылка всем\n"
-        "🔹 /users — количество пользователей\n"
-        "🔹 /users_list — список пользователей",
-        parse_mode="Markdown"
-    )
-
-# ========== АДМИНСКИЕ КОМАНДЫ ==========
 @bot.message_handler(commands=['users'])
 def users_count(message):
     if message.from_user.id != ADMIN_ID:
@@ -101,17 +98,18 @@ def broadcast(message):
     
     users = get_users()
     if not users:
-        bot.send_message(message.chat.id, "📭 Нет пользователей для рассылки")
+        bot.send_message(message.chat.id, "📭 Нет пользователей")
         return
     
-    bot.send_message(message.chat.id, f"📢 Начинаю рассылку {len(users)} пользователям...")
+    bot.send_message(message.chat.id, f"📢 Рассылка {len(users)} пользователям...")
     
     ok = 0
     fail = 0
     
     for u in users:
         try:
-            bot.send_message(u['id'], f"📢 **Сообщение от админа:**\n\n{text}", parse_mode="Markdown")
+            # Можно и с кнопкой в рассылке, если нужно
+            bot.send_message(u['id'], f"📢 {text}")
             ok += 1
             time.sleep(0.05)
         except:
@@ -119,21 +117,17 @@ def broadcast(message):
     
     bot.send_message(
         message.chat.id,
-        f"✅ **Рассылка завершена!**\n\n"
-        f"📨 Отправлено: {ok}\n"
-        f"❌ Не доставлено: {fail}\n"
-        f"👥 Всего: {len(users)}"
+        f"✅ Отправлено: {ok}\n❌ Не доставлено: {fail}\n👥 Всего: {len(users)}"
     )
 
-# ========== ЗАПУСК ==========
+# ------------------ ЗАПУСК ------------------
 if __name__ == "__main__":
-    print("✅ Бот Badiworldbot запущен!")
+    print("✅ Бот Badiworldbot запущен с кнопкой 'БАДы'")
     print(f"Админ: {ADMIN_ID}")
     print(f"Пользователей: {len(get_users())}")
     
     while True:
         try:
             bot.infinity_polling(timeout=60)
-        except Exception as e:
-            print(f"Ошибка: {e}")
+        except:
             time.sleep(5)
