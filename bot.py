@@ -9,10 +9,13 @@ import json
 import os
 
 TOKEN = '8749955457:AAFrM_9bMzQoT6ibN97Kx5SHHWTKHrS0QRc'
+OPENROUTER_API_KEY = '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'
 ADMIN_ID = 8749955457
 
 bot = telebot.TeleBot(TOKEN)
 USERS_FILE = 'users.json'
+user_game_mode = {}  # для игры
+user_ai_mode = {}    # для ИИ
 
 # ========== СОХРАНЕНИЕ ПОЛЬЗОВАТЕЛЕЙ ==========
 def save_user(user_id, first_name, username):
@@ -40,6 +43,35 @@ def get_all_users():
             return json.load(f)
     except:
         return []
+
+# ========== ИИ (OPENROUTER) ==========
+def ask_ai(msg, name):
+    try:
+        response = requests.post(
+            url="https://openrouter.ai/api/v1/chat/completions",
+            headers={
+                "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+                "Content-Type": "application/json"
+            },
+            json={
+                "model": "mistralai/mistral-7b-instruct",
+                "messages": [
+                    {"role": "system", "content": f"Ты дружелюбный помощник по имени Губаты. Общаешься с {name}. Отвечай кратко и дружелюбно."},
+                    {"role": "user", "content": msg}
+                ],
+                "max_tokens": 500
+            },
+            timeout=30
+        )
+        
+        if response.status_code != 200:
+            return f"😕 Ошибка API: {response.status_code}"
+        
+        data = response.json()
+        return data['choices'][0]['message']['content']
+        
+    except Exception as e:
+        return f"😵 Ошибка: {e}"
 
 # ========== КУРСЫ ВАЛЮТ ==========
 def get_currency_rates():
@@ -100,19 +132,27 @@ def translate_text(text):
         return "😵 Ошибка перевода"
 
 # ========== ИГРА ГУБАТЫ ==========
-user_game_mode = {}
-
 def start_game(chat_id):
     user_game_mode[chat_id] = True
+    user_ai_mode[chat_id] = False
     return "🎮 Игра Губаты! Задавай вопросы, я отвечаю Да/Нет. Нажми 'Выход' чтобы закончить."
 
 def stop_game(chat_id):
     user_game_mode[chat_id] = False
-    return "🎮 Игра завершена. Нажми /start для главного меню."
+    return "🎮 Игра завершена."
 
 def play_game(question):
-    answers = ["Да ✅", "Нет ❌"]
-    return random.choice(answers)
+    return random.choice(["Да ✅", "Нет ❌"])
+
+# ========== ИИ РЕЖИМ ==========
+def start_ai(chat_id):
+    user_ai_mode[chat_id] = True
+    user_game_mode[chat_id] = False
+    return "🤖 Режим ИИ включён! Задавай любые вопросы. Нажми 'Выход' чтобы закончить."
+
+def stop_ai(chat_id):
+    user_ai_mode[chat_id] = False
+    return "🤖 Режим ИИ завершён."
 
 # ========== КЛАВИАТУРА ==========
 def main_keyboard():
@@ -122,16 +162,17 @@ def main_keyboard():
         types.KeyboardButton("🧮 Калькулятор"),
         types.KeyboardButton("🌐 Перевод"),
         types.KeyboardButton("🎮 Губаты"),
+        types.KeyboardButton("🤖 ИИ"),
         types.KeyboardButton("❓ Помощь")
     )
     return markup
 
-def game_keyboard():
+def mode_keyboard():
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(types.KeyboardButton("🚪 Выход"))
     return markup
 
-# ========== КОМАНДА /67 (секретная) ==========
+# ========== КОМАНДА /67 ==========
 @bot.message_handler(commands=['67'])
 def secret_67(message):
     for i in range(67):
@@ -143,6 +184,7 @@ def secret_67(message):
 def start(message):
     save_user(message.chat.id, message.from_user.first_name, message.from_user.username)
     user_game_mode[message.chat.id] = False
+    user_ai_mode[message.chat.id] = False
     bot.send_message(
         message.chat.id,
         f"Привет, {message.from_user.first_name}! 👋\n\n"
@@ -164,6 +206,16 @@ def handle_buttons(message):
             bot.send_message(chat_id, play_game(text))
         return
     
+    # Режим ИИ
+    if user_ai_mode.get(chat_id, False):
+        if text == "🚪 Выход":
+            bot.send_message(chat_id, stop_ai(chat_id), reply_markup=main_keyboard())
+        else:
+            bot.send_chat_action(chat_id, 'typing')
+            answer = ask_ai(text, message.from_user.first_name)
+            bot.send_message(chat_id, answer)
+        return
+    
     # Обычные кнопки
     if text == "💰 Курсы":
         bot.send_message(chat_id, get_currency_rates(), parse_mode="Markdown")
@@ -177,8 +229,10 @@ def handle_buttons(message):
         bot.register_next_step_handler(msg, translate_handler)
         
     elif text == "🎮 Губаты":
-        user_game_mode[chat_id] = True
-        bot.send_message(chat_id, start_game(chat_id), reply_markup=game_keyboard())
+        bot.send_message(chat_id, start_game(chat_id), reply_markup=mode_keyboard())
+        
+    elif text == "🤖 ИИ":
+        bot.send_message(chat_id, start_ai(chat_id), reply_markup=mode_keyboard())
         
     elif text == "❓ Помощь":
         bot.send_message(
@@ -188,7 +242,8 @@ def handle_buttons(message):
             "🧮 **Калькулятор** — введи пример (2+2, 10*5)\n"
             "🌐 **Перевод** — переведу любой текст на русский\n"
             "🎮 **Губаты** — игра Да/Нет, задавай вопросы\n"
-            "🚪 **Выход** — выйти из игры\n\n"
+            "🤖 **ИИ** — умный помощник, отвечает на любые вопросы\n"
+            "🚪 **Выход** — выйти из игры или ИИ\n\n"
             "🔹 /67 — секретная команда",
             parse_mode="Markdown"
         )
@@ -215,7 +270,8 @@ def translate_handler(message):
 
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    print("✅ Бот Губаты с кнопками запущен!")
+    print("✅ Бот Губаты с ИИ и кнопками запущен!")
+    print("🤖 Использует Mistral 7B (бесплатно)")
     while True:
         try:
             bot.infinity_polling(timeout=60)
