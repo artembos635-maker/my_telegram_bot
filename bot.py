@@ -6,29 +6,31 @@ import time
 from datetime import datetime, timedelta
 
 TOKEN = '8786806064:AAGnZbQeNQCow4txVsS_O_-BQkDLkARk6RU'
-ADMINS = [7717477509, 1334363706]  # Ты и Julia
+ADMINS = [7717477509, 1334363706]
 
 bot = telebot.TeleBot(TOKEN)
 USERS_FILE = 'users.json'
 
-def is_admin(user_id):
-    return user_id in ADMINS
-
-# ========== РАБОТА С ПОЛЬЗОВАТЕЛЯМИ ==========
+# ========== РАБОТА С ФАЙЛОМ (НЕ ТРОГАЕТСЯ ПРИ ОБНОВЛЕНИИ) ==========
 def get_users():
     try:
         if not os.path.exists(USERS_FILE):
             with open(USERS_FILE, 'w', encoding='utf-8') as f:
-                json.dump([], f)
+                json.dump([], f, ensure_ascii=False, indent=2)
             return []
         with open(USERS_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
-    except:
+    except Exception as e:
+        print(f"Ошибка чтения: {e}")
         return []
 
 def save_users(users):
-    with open(USERS_FILE, 'w', encoding='utf-8') as f:
-        json.dump(users, f, ensure_ascii=False, indent=2)
+    try:
+        with open(USERS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(users, f, ensure_ascii=False, indent=2)
+        print(f"✅ Сохранено {len(users)} пользователей")
+    except Exception as e:
+        print(f"Ошибка сохранения: {e}")
 
 def add_user(user_id, name, username):
     users = get_users()
@@ -45,7 +47,11 @@ def add_user(user_id, name, username):
         'last_active': datetime.now().isoformat()
     })
     save_users(users)
+    print(f"✅ Новый пользователь: {name} (ID: {user_id})")
     return True
+
+def is_admin(user_id):
+    return user_id in ADMINS
 
 # ========== СТАТИСТИКА ==========
 def get_stats():
@@ -195,7 +201,7 @@ def get_caption_for_broadcast(message):
     broadcast_photo = None
     broadcast_caption = None
 
-# ========== СОХРАНЕНИЕ ВСЕХ ==========
+# ========== СОХРАНЕНИЕ ВСЕХ, КТО ПИШЕТ ==========
 @bot.message_handler(func=lambda m: True)
 def save_all(m):
     add_user(m.chat.id, m.from_user.first_name, m.from_user.username)
@@ -208,5 +214,6 @@ if __name__ == "__main__":
     while True:
         try:
             bot.infinity_polling(timeout=60)
-        except:
+        except Exception as e:
+            print(f"Ошибка: {e}")
             time.sleep(5)
