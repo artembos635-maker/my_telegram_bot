@@ -6,10 +6,13 @@ import time
 from datetime import datetime, timedelta
 
 TOKEN = '8786806064:AAGnZbQeNQCow4txVsS_O_-BQkDLkARk6RU'
-ADMIN_ID = 7717477509
+ADMINS = [7717477509, 1334363706]  # Ты и Julia
 
 bot = telebot.TeleBot(TOKEN)
 USERS_FILE = 'users.json'
+
+def is_admin(user_id):
+    return user_id in ADMINS
 
 # ========== РАБОТА С ПОЛЬЗОВАТЕЛЯМИ ==========
 def get_users():
@@ -86,20 +89,20 @@ def start(message):
 
 @bot.message_handler(commands=['stats'])
 def stats_command(message):
-    if message.from_user.id != ADMIN_ID:
+    if not is_admin(message.from_user.id):
         return
     bot.send_message(message.chat.id, get_stats(), parse_mode="Markdown")
 
 @bot.message_handler(commands=['users'])
 def users_count(message):
-    if message.from_user.id != ADMIN_ID:
+    if not is_admin(message.from_user.id):
         return
     users = get_users()
     bot.send_message(message.chat.id, f"👥 Всего пользователей: {len(users)}")
 
 @bot.message_handler(commands=['users_list'])
 def users_list(message):
-    if message.from_user.id != ADMIN_ID:
+    if not is_admin(message.from_user.id):
         return
     users = get_users()
     if not users:
@@ -117,7 +120,7 @@ def users_list(message):
 
 @bot.message_handler(commands=['broadcast'])
 def broadcast(message):
-    if message.from_user.id != ADMIN_ID:
+    if not is_admin(message.from_user.id):
         return
     text = message.text.replace('/broadcast', '', 1).strip()
     if not text:
@@ -142,10 +145,16 @@ def broadcast(message):
 # ========== РАССЫЛКА ФОТО ==========
 @bot.message_handler(commands=['send_photo'])
 def send_photo_start(message):
-    if message.from_user.id != ADMIN_ID:
+    if not is_admin(message.from_user.id):
         bot.send_message(message.chat.id, "❌ Нет прав")
         return
-    bot.send_message(message.chat.id, "📸 Отправь мне фото, которое хочешь разослать.")
+    
+    users = get_users()
+    if not users:
+        bot.send_message(message.chat.id, "📭 Нет пользователей в базе! Сначала нажми /start")
+        return
+    
+    bot.send_message(message.chat.id, f"👥 В базе {len(users)} пользователей. Отправь фото для рассылки.")
     bot.register_next_step_handler(message, get_photo_for_broadcast)
 
 def get_photo_for_broadcast(message):
@@ -194,7 +203,7 @@ def save_all(m):
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
     print("✅ Бот Badiworldbot запущен")
-    print(f"Админ: {ADMIN_ID}")
+    print(f"Админы: {ADMINS}")
     print(f"Пользователей в базе: {len(get_users())}")
     while True:
         try:
