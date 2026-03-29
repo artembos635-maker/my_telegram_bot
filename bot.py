@@ -1,4 +1,5 @@
 import telebot
+from telebot import types
 import json
 import os
 import time
@@ -10,7 +11,7 @@ ADMIN_ID = 7717477509
 bot = telebot.TeleBot(TOKEN)
 USERS_FILE = 'users.json'
 
-# ========== РАБОТА С ФАЙЛОМ (НЕ ПЕРЕЗАПИСЫВАЕТ ПРИ ОБНОВЛЕНИИ) ==========
+# ========== РАБОТА С ПОЛЬЗОВАТЕЛЯМИ ==========
 def get_users():
     try:
         if not os.path.exists(USERS_FILE):
@@ -41,7 +42,6 @@ def add_user(user_id, name, username):
         'last_active': datetime.now().isoformat()
     })
     save_users(users)
-    print(f"✅ Новый пользователь: {name} (ID: {user_id})")
     return True
 
 # ========== СТАТИСТИКА ==========
@@ -64,16 +64,25 @@ def get_stats():
     
     return (f"📊 **Статистика**\n\n👥 Всего: {total}\n\n📈 Новые:\n   • За сегодня: {new_today}\n   • За неделю: {new_week}\n   • За месяц: {new_month}\n\n🔥 Активные за неделю: {active_week}")
 
+# ========== КНОПКА ==========
+def start_keyboard():
+    markup = types.InlineKeyboardMarkup()
+    markup.add(types.InlineKeyboardButton(text="🌿 БАДы", url="https://nspgoods.by/bady/"))
+    return markup
+
+# ========== ПЕРЕМЕННЫЕ ДЛЯ РАССЫЛКИ ФОТО ==========
+broadcast_photo = None
+broadcast_caption = None
+
 # ========== КОМАНДЫ ==========
 @bot.message_handler(commands=['start'])
 def start(message):
     add_user(message.chat.id, message.from_user.first_name, message.from_user.username)
-    bot.send_message(message.chat.id, f"Привет, {message.from_user.first_name}! 👋\n\nНажми на кнопку, чтобы перейти в каталог.", reply_markup=start_keyboard())
-
-def start_keyboard():
-    markup = telebot.types.InlineKeyboardMarkup()
-    markup.add(telebot.types.InlineKeyboardButton(text="🌿 БАДы", url="https://nspgoods.by/bady/"))
-    return markup
+    bot.send_message(
+        message.chat.id,
+        f"Привет, {message.from_user.first_name}! 👋\n\nНажми на кнопку, чтобы перейти в каталог.",
+        reply_markup=start_keyboard()
+    )
 
 @bot.message_handler(commands=['stats'])
 def stats_command(message):
@@ -86,7 +95,7 @@ def users_count(message):
     if message.from_user.id != ADMIN_ID:
         return
     users = get_users()
-    bot.send_message(message.chat.id, f"👥 Всего: {len(users)}")
+    bot.send_message(message.chat.id, f"👥 Всего пользователей: {len(users)}")
 
 @bot.message_handler(commands=['users_list'])
 def users_list(message):
@@ -112,7 +121,7 @@ def broadcast(message):
         return
     text = message.text.replace('/broadcast', '', 1).strip()
     if not text:
-        bot.send_message(message.chat.id, "❌ Введите текст")
+        bot.send_message(message.chat.id, "❌ Введите текст\nПример: /broadcast Всем привет!")
         return
     users = get_users()
     if not users:
@@ -130,14 +139,61 @@ def broadcast(message):
             fail += 1
     bot.send_message(message.chat.id, f"✅ Отправлено: {ok}\n❌ Не доставлено: {fail}")
 
-# ========== СОХРАНЯЕМ ВСЕХ, КТО ПИШЕТ ==========
+# ========== РАССЫЛКА ФОТО ==========
+@bot.message_handler(commands=['send_photo'])
+def send_photo_start(message):
+    if message.from_user.id != ADMIN_ID:
+        bot.send_message(message.chat.id, "❌ Нет прав")
+        return
+    bot.send_message(message.chat.id, "📸 Отправь мне фото, которое хочешь разослать.")
+    bot.register_next_step_handler(message, get_photo_for_broadcast)
+
+def get_photo_for_broadcast(message):
+    global broadcast_photo, broadcast_caption
+    if message.photo:
+        broadcast_photo = message.photo[-1].file_id
+        bot.send_message(message.chat.id, "✍️ Теперь отправь текст к фото (или нажми /skip чтобы без текста).")
+        bot.register_next_step_handler(message, get_caption_for_broadcast)
+    else:
+        bot.send_message(message.chat.id, "❌ Это не фото. Попробуй ещё раз /send_photo")
+
+def get_caption_for_broadcast(message):
+    global broadcast_photo, broadcast_caption
+    if message.text == "/skip":
+        broadcast_caption = None
+    else:
+        broadcast_caption = f"🛡️ **Сообщение от модератора:**\n\n{message.text}"
+    
+    users = get_users()
+    if not users:
+        bot.send_message(message.chat.id, "📭 Нет пользователей")
+        broadcast_photo = None
+        broadcast_caption = None
+        return
+    
+    bot.send_message(message.chat.id, f"📢 Рассылка фото {len(users)} пользователям...")
+    
+    ok = fail = 0
+    for u in users:
+        try:
+            bot.send_photo(u['id'], broadcast_photo, caption=broadcast_caption, parse_mode="Markdown")
+            ok += 1
+            time.sleep(0.05)
+        except:
+            fail += 1
+    
+    bot.send_message(message.chat.id, f"✅ Отправлено: {ok}\n❌ Не доставлено: {fail}")
+    broadcast_photo = None
+    broadcast_caption = None
+
+# ========== СОХРАНЕНИЕ ВСЕХ ==========
 @bot.message_handler(func=lambda m: True)
 def save_all(m):
     add_user(m.chat.id, m.from_user.first_name, m.from_user.username)
 
 # ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    print("✅ Бот запущен")
+    print("✅ Бот Badiworldbot запущен")
     print(f"Админ: {ADMIN_ID}")
     print(f"Пользователей в базе: {len(get_users())}")
     while True:
