@@ -70,7 +70,7 @@ def get_stats():
 # ========== КНОПКА ==========
 def start_keyboard():
     markup = types.InlineKeyboardMarkup()
-    markup.add(types.InlineKeyboardButton(text="🌿 БАДы", url="https://nspgoods.by/bady/"))
+    markup.add(types.InlineKeyboardButton(text="🌍 Официальный сайт NSP", url="https://naturessunshine.ru/"))
     return markup
 
 # ========== ПЕРЕМЕННЫЕ ДЛЯ РАССЫЛКИ ФОТО ==========
@@ -83,7 +83,7 @@ def start(message):
     add_user(message.chat.id, message.from_user.first_name, message.from_user.username)
     bot.send_message(
         message.chat.id,
-        f"Привет, {message.from_user.first_name}! 👋\n\nНажми на кнопку, чтобы перейти в каталог.",
+        f"Привет, {message.from_user.first_name}! 👋\n\nНажми на кнопку, чтобы перейти на официальный сайт NSP.",
         reply_markup=start_keyboard()
     )
 
