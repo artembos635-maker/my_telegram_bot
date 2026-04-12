@@ -4,14 +4,16 @@ import json
 import os
 import time
 from datetime import datetime, timedelta
+import re
 
 TOKEN = '8786806064:AAGnZbQeNQCow4txVsS_O_-BQkDLkARk6RU'
 ADMINS = [7717477509, 1334363706]
-GROUP_ID = None  # ПОКА НЕ ЗНАЕШЬ — ОСТАВЬ None
+GROUP_ID = -1003514715489
 
 bot = telebot.TeleBot(TOKEN)
 USERS_FILE = 'users.json'
 
+# ========== ПОЛЬЗОВАТЕЛИ ==========
 def get_users():
     try:
         if not os.path.exists(USERS_FILE):
@@ -47,108 +49,119 @@ def add_user(user_id, name, username):
 def is_admin(user_id):
     return user_id in ADMINS
 
-def get_stats():
-    users = get_users()
-    total = len(users)
-    now = datetime.now()
-    today_start = datetime(now.year, now.month, now.day)
-    week_ago = now - timedelta(days=7)
-    month_ago = now - timedelta(days=30)
-    
-    new_today = new_week = new_month = active_week = 0
-    for u in users:
-        joined = datetime.fromisoformat(u.get('joined', '2000-01-01'))
-        last_active = datetime.fromisoformat(u.get('last_active', '2000-01-01'))
-        if joined >= today_start: new_today += 1
-        if joined >= week_ago: new_week += 1
-        if joined >= month_ago: new_month += 1
-        if last_active >= week_ago: active_week += 1
-    
-    return (f"📊 Статистика\n\n👥 Всего: {total}\n\n📈 Новые:\n   • За сегодня: {new_today}\n   • За неделю: {new_week}\n   • За месяц: {new_month}\n\n🔥 Активные за неделю: {active_week}")
-
+# ========== КНОПКА ==========
 def start_keyboard():
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton(text="🌍 Официальный сайт NSP", url="https://naturessunshine.ru/"))
     return markup
 
-# ========== ВРЕМЕННАЯ КОМАНДА ДЛЯ ПОЛУЧЕНИЯ ID ==========
-@bot.message_handler(commands=['getid'])
-def get_id(message):
-    bot.send_message(message.chat.id, f"ID этого чата: `{message.chat.id}`", parse_mode="Markdown")
+# ========== ОТПРАВКА В ГРУППУ ==========
+def send_to_group(user_id, user_name, username, text=None, photo=None, caption_text=None):
+    try:
+        header = f"📩 **Сообщение от пользователя**\n👤 {user_name} (@{username if username else 'нет username'})\n🆔 `{user_id}`"
+        
+        if photo:
+            # Фото с подписью или без
+            final_caption = header
+            if caption_text:
+                final_caption += f"\n\n📝 {caption_text}"
+            bot.send_photo(GROUP_ID, photo, caption=final_caption, parse_mode="Markdown")
+        elif text:
+            bot.send_message(GROUP_ID, header, parse_mode="Markdown")
+            bot.send_message(GROUP_ID, text)
+    except Exception as e:
+        print(f"Ошибка отправки: {e}")
 
-# ========== ОСНОВНЫЕ КОМАНДЫ ==========
+# ========== ОТВЕТ ПОЛЬЗОВАТЕЛЮ ==========
+@bot.message_handler(func=lambda m: m.chat.id == GROUP_ID and m.reply_to_message)
+def answer_from_group(message):
+    if not is_admin(message.from_user.id):
+        bot.send_message(GROUP_ID, "❌ Ты не админ")
+        return
+    try:
+        original = message.reply_to_message
+        if not original:
+            return
+        match = re.search(r"🆔 `(\d+)`", original.text if original.text else str(original.caption or ""))
+        if not match:
+            bot.send_message(GROUP_ID, "❌ Не найден ID пользователя")
+            return
+        user_id = int(match.group(1))
+        bot.send_message(user_id, f"🛡️ **Ответ от модератора:**\n\n{message.text}")
+        bot.send_message(GROUP_ID, f"✅ Ответ отправлен пользователю")
+    except Exception as e:
+        bot.send_message(GROUP_ID, f"❌ Ошибка: {e}")
+
+# ========== КОМАНДЫ ==========
 @bot.message_handler(commands=['start'])
 def start(message):
     add_user(message.chat.id, message.from_user.first_name, message.from_user.username)
     bot.send_message(
         message.chat.id,
-        f"Привет, {message.from_user.first_name}! 👋\n\nНажми на кнопку, чтобы перейти на официальный сайт NSP.",
-        reply_markup=start_keyboard()
+        f"Привет, {message.from_user.first_name}! 👋\n\nНажми на кнопку, чтобы перейти на официальный сайт NSP.\n\n"
+        f"**Как отправить сообщение модераторам:**\n"
+        f"• Текст: `/otp твой текст`\n"
+        f"• Фото: отправь фото с подписью `/otp`\n"
+        f"• Фото с текстом: отправь фото с подписью `/otp твой текст`",
+        reply_markup=start_keyboard(),
+        parse_mode="Markdown"
     )
 
-@bot.message_handler(commands=['stats'])
-def stats_command(message):
-    if not is_admin(message.from_user.id):
-        return
-    bot.send_message(message.chat.id, get_stats())
-
-@bot.message_handler(commands=['users'])
-def users_count(message):
-    if not is_admin(message.from_user.id):
-        return
-    users = get_users()
-    bot.send_message(message.chat.id, f"👥 Всего пользователей: {len(users)}")
-
-@bot.message_handler(commands=['users_list'])
-def users_list(message):
-    if not is_admin(message.from_user.id):
-        return
-    users = get_users()
-    if not users:
-        bot.send_message(message.chat.id, "📭 Нет пользователей")
-        return
-    text = f"📋 Список ({len(users)}):\n\n"
-    for i, u in enumerate(users, 1):
-        un = f"@{u['username']}" if u['username'] != 'нет username' else 'без username'
-        text += f"{i}. {u['name']} ({un}) — ID: {u['id']}\n"
-        if len(text) > 3500:
-            bot.send_message(message.chat.id, text)
-            text = ""
+@bot.message_handler(commands=['otp', 'Otp', 'OTP'])
+def otp_text(message):
+    user_id = message.chat.id
+    user_name = message.from_user.first_name
+    username = message.from_user.username
+    add_user(user_id, user_name, username)
+    
+    text = message.text.replace('/otp', '', 1).replace('/Otp', '', 1).replace('/OTP', '', 1).strip()
     if text:
-        bot.send_message(message.chat.id, text)
+        send_to_group(user_id, user_name, username, text=text)
+    else:
+        bot.send_message(user_id, "❌ Напиши текст после команды /otp\nПример: `/otp Здравствуйте!`", parse_mode="Markdown")
 
-@bot.message_handler(commands=['broadcast'])
-def broadcast(message):
-    if not is_admin(message.from_user.id):
-        return
-    text = message.text.replace('/broadcast', '', 1).strip()
-    if not text:
-        bot.send_message(message.chat.id, "❌ Введите текст\nПример: /broadcast Всем привет!")
-        return
-    users = get_users()
-    if not users:
-        bot.send_message(message.chat.id, "📭 Нет пользователей")
-        return
-    broadcast_text = f"🛡️ Сообщение от модератора:\n\n{text}"
-    bot.send_message(message.chat.id, f"📢 Рассылка {len(users)} пользователям...")
-    ok = fail = 0
-    for u in users:
-        try:
-            bot.send_message(u['id'], broadcast_text)
-            ok += 1
-            time.sleep(0.05)
-        except:
-            fail += 1
-    bot.send_message(message.chat.id, f"✅ Отправлено: {ok}\n❌ Не доставлено: {fail}")
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    user_id = message.chat.id
+    user_name = message.from_user.first_name
+    username = message.from_user.username
+    add_user(user_id, user_name, username)
+    
+    caption = message.caption or ""
+    
+    # Проверяем, есть ли команда /otp в подписи
+    if caption.lower().startswith('/otp'):
+        # Убираем /otp из подписи
+        clean_caption = re.sub(r'^/otp\s*', '', caption, flags=re.IGNORECASE).strip()
+        send_to_group(user_id, user_name, username, photo=message.photo[-1].file_id, caption_text=clean_caption if clean_caption else None)
+    else:
+        # Если нет команды /otp — просто сохраняем пользователя, но не пересылаем
+        pass
 
+# ========== АВТОМАТИЧЕСКАЯ ПЕРЕСЫЛКА ГОЛОСОВЫХ ==========
+@bot.message_handler(content_types=['voice'])
+def handle_voice(message):
+    user_id = message.chat.id
+    user_name = message.from_user.first_name
+    username = message.from_user.username
+    add_user(user_id, user_name, username)
+    
+    header = f"📩 **Голосовое сообщение от пользователя**\n👤 {user_name} (@{username if username else 'нет username'})\n🆔 `{user_id}`"
+    try:
+        bot.send_voice(GROUP_ID, message.voice.file_id, caption=header, parse_mode="Markdown")
+    except Exception as e:
+        print(f"Ошибка пересылки голосового: {e}")
+
+# ========== СОХРАНЕНИЕ ПОЛЬЗОВАТЕЛЕЙ ==========
 @bot.message_handler(func=lambda m: True)
-def save_all(m):
-    add_user(m.chat.id, m.from_user.first_name, m.from_user.username)
+def save_user_handler(message):
+    add_user(message.chat.id, message.from_user.first_name, message.from_user.username)
 
+# ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    print("✅ Бот запущен")
+    print("✅ Бот запущен. /otp — текст или фото с подписью /otp")
     print(f"Админы: {ADMINS}")
-    print(f"Пользователей: {len(get_users())}")
+    print(f"ID группы: {GROUP_ID}")
     while True:
         try:
             bot.infinity_polling(timeout=60)
