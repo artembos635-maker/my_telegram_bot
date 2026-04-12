@@ -7,8 +7,7 @@ from datetime import datetime, timedelta
 
 TOKEN = '8786806064:AAGnZbQeNQCow4txVsS_O_-BQkDLkARk6RU'
 ADMINS = [7717477509, 1334363706]
-# ВРЕМЕННО: пока не узнаешь ID, оставь None
-GROUP_ID = None
+GROUP_ID = -1003514715489  # ТВОЙ ID ГРУППЫ
 
 bot = telebot.TeleBot(TOKEN)
 USERS_FILE = 'users.json'
@@ -57,7 +56,7 @@ def get_stats():
     today_start = datetime(now.year, now.month, now.day)
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)
-
+    
     new_today = new_week = new_month = active_week = 0
     for u in users:
         joined = datetime.fromisoformat(u.get('joined', '2000-01-01'))
@@ -66,7 +65,7 @@ def get_stats():
         if joined >= week_ago: new_week += 1
         if joined >= month_ago: new_month += 1
         if last_active >= week_ago: active_week += 1
-
+    
     return (f"📊 Статистика\n\n👥 Всего: {total}\n\n📈 Новые:\n   • За сегодня: {new_today}\n   • За неделю: {new_week}\n   • За месяц: {new_month}\n\n🔥 Активные за неделю: {active_week}")
 
 # ========== КНОПКА ==========
@@ -74,6 +73,49 @@ def start_keyboard():
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton(text="🌍 Официальный сайт NSP", url="https://naturessunshine.ru/"))
     return markup
+
+# ========== ПЕРЕСЫЛКА В ГРУППУ ==========
+def forward_to_group(message, user_id):
+    try:
+        user = message.from_user
+        caption = f"📩 **Сообщение от пользователя**\n👤 {user.first_name} (@{user.username if user.username else 'нет username'})\n🆔 `{user_id}`"
+        
+        if message.text:
+            bot.send_message(GROUP_ID, caption, parse_mode="Markdown")
+            bot.send_message(GROUP_ID, message.text)
+        elif message.photo:
+            bot.send_photo(GROUP_ID, message.photo[-1].file_id, caption=caption, parse_mode="Markdown")
+        elif message.video:
+            bot.send_video(GROUP_ID, message.video.file_id, caption=caption, parse_mode="Markdown")
+        elif message.document:
+            bot.send_document(GROUP_ID, message.document.file_id, caption=caption, parse_mode="Markdown")
+        elif message.voice:
+            bot.send_voice(GROUP_ID, message.voice.file_id, caption=caption, parse_mode="Markdown")
+    except Exception as e:
+        print(f"Ошибка пересылки: {e}")
+
+# ========== ОТВЕТ ПОЛЬЗОВАТЕЛЮ ИЗ ГРУППЫ ==========
+@bot.message_handler(func=lambda m: m.chat.id == GROUP_ID and m.reply_to_message)
+def answer_from_group(message):
+    if not is_admin(message.from_user.id):
+        bot.send_message(GROUP_ID, "❌ Ты не админ")
+        return
+    try:
+        original = message.reply_to_message
+        if not original:
+            return
+        
+        import re
+        match = re.search(r"🆔 `(\d+)`", original.text if original.text else str(original.caption or ""))
+        if not match:
+            bot.send_message(GROUP_ID, "❌ Не найден ID пользователя в исходном сообщении")
+            return
+        
+        user_id = int(match.group(1))
+        bot.send_message(user_id, f"🛡️ **Ответ от модератора:**\n\n{message.text}")
+        bot.send_message(GROUP_ID, f"✅ Ответ отправлен пользователю")
+    except Exception as e:
+        bot.send_message(GROUP_ID, f"❌ Ошибка: {e}")
 
 # ========== КОМАНДЫ ==========
 @bot.message_handler(commands=['start'])
@@ -140,21 +182,18 @@ def broadcast(message):
             fail += 1
     bot.send_message(message.chat.id, f"✅ Отправлено: {ok}\n❌ Не доставлено: {fail}")
 
-# ========== ОПРЕДЕЛЕНИЕ ID ГРУППЫ ==========
-@bot.message_handler(content_types=['new_chat_members'])
-def on_bot_added(message):
-    for member in message.new_chat_members:
-        if member.id == bot.get_me().id:
-            bot.send_message(message.chat.id, f"✅ Бот добавлен!\nID этой группы: `{message.chat.id}`", parse_mode="Markdown")
-
-# ========== СОХРАНЕНИЕ ВСЕХ ==========
+# ========== СОХРАНЕНИЕ И ПЕРЕСЫЛКА ==========
 @bot.message_handler(func=lambda m: True)
-def save_all(m):
-    add_user(m.chat.id, m.from_user.first_name, m.from_user.username)
+def save_and_forward(message):
+    user_id = message.chat.id
+    add_user(user_id, message.from_user.first_name, message.from_user.username)
+    forward_to_group(message, user_id)
 
+# ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    print("✅ Бот запущен")
+    print("✅ Бот запущен. Все сообщения пересылаются в группу.")
     print(f"Админы: {ADMINS}")
+    print(f"ID группы: {GROUP_ID}")
     print(f"Пользователей: {len(get_users())}")
     while True:
         try:
