@@ -7,11 +7,13 @@ from datetime import datetime, timedelta
 
 TOKEN = '8786806064:AAGnZbQeNQCow4txVsS_O_-BQkDLkARk6RU'
 ADMINS = [7717477509, 1334363706]
+# ВРЕМЕННО: пока не узнаешь ID, оставь None
+GROUP_ID = None
 
 bot = telebot.TeleBot(TOKEN)
 USERS_FILE = 'users.json'
 
-# ========== РАБОТА С ПОЛЬЗОВАТЕЛЯМИ ==========
+# ========== ПОЛЬЗОВАТЕЛИ ==========
 def get_users():
     try:
         if not os.path.exists(USERS_FILE):
@@ -55,7 +57,7 @@ def get_stats():
     today_start = datetime(now.year, now.month, now.day)
     week_ago = now - timedelta(days=7)
     month_ago = now - timedelta(days=30)
-    
+
     new_today = new_week = new_month = active_week = 0
     for u in users:
         joined = datetime.fromisoformat(u.get('joined', '2000-01-01'))
@@ -64,7 +66,7 @@ def get_stats():
         if joined >= week_ago: new_week += 1
         if joined >= month_ago: new_month += 1
         if last_active >= week_ago: active_week += 1
-    
+
     return (f"📊 Статистика\n\n👥 Всего: {total}\n\n📈 Новые:\n   • За сегодня: {new_today}\n   • За неделю: {new_week}\n   • За месяц: {new_month}\n\n🔥 Активные за неделю: {active_week}")
 
 # ========== КНОПКА ==========
@@ -72,10 +74,6 @@ def start_keyboard():
     markup = types.InlineKeyboardMarkup()
     markup.add(types.InlineKeyboardButton(text="🌍 Официальный сайт NSP", url="https://naturessunshine.ru/"))
     return markup
-
-# ========== ПЕРЕМЕННЫЕ ДЛЯ РАССЫЛКИ ФОТО ==========
-broadcast_photo = None
-broadcast_caption = None
 
 # ========== КОМАНДЫ ==========
 @bot.message_handler(commands=['start'])
@@ -142,68 +140,18 @@ def broadcast(message):
             fail += 1
     bot.send_message(message.chat.id, f"✅ Отправлено: {ok}\n❌ Не доставлено: {fail}")
 
-# ========== РАССЫЛКА ФОТО ==========
-@bot.message_handler(commands=['send_photo'])
-def send_photo_start(message):
-    if not is_admin(message.from_user.id):
-        bot.send_message(message.chat.id, "❌ Нет прав")
-        return
-    
-    users = get_users()
-    if not users:
-        bot.send_message(message.chat.id, "📭 Нет пользователей")
-        return
-    
-    bot.send_message(message.chat.id, f"📸 Отправь фото для рассылки ({len(users)} чел.)")
-    bot.register_next_step_handler(message, get_photo_for_broadcast)
-
-def get_photo_for_broadcast(message):
-    global broadcast_photo, broadcast_caption
-    if message.photo:
-        broadcast_photo = message.photo[-1].file_id
-        bot.send_message(message.chat.id, "✍️ Теперь отправь текст (или /skip)")
-        bot.register_next_step_handler(message, get_caption_for_broadcast)
-    else:
-        bot.send_message(message.chat.id, "❌ Это не фото. Попробуй /send_photo")
-
-def get_caption_for_broadcast(message):
-    global broadcast_photo, broadcast_caption
-    if message.text == "/skip":
-        broadcast_caption = None
-    else:
-        broadcast_caption = f"🛡️ Сообщение от модератора:\n\n{message.text}"
-    
-    users = get_users()
-    if not users:
-        bot.send_message(message.chat.id, "📭 Нет пользователей")
-        broadcast_photo = None
-        broadcast_caption = None
-        return
-    
-    bot.send_message(message.chat.id, f"📢 Рассылка фото {len(users)} пользователям...")
-    
-    ok = fail = 0
-    for u in users:
-        try:
-            if broadcast_caption:
-                bot.send_photo(u['id'], broadcast_photo, caption=broadcast_caption)
-            else:
-                bot.send_photo(u['id'], broadcast_photo)
-            ok += 1
-            time.sleep(0.05)
-        except:
-            fail += 1
-    
-    bot.send_message(message.chat.id, f"✅ Отправлено: {ok}\n❌ Не доставлено: {fail}")
-    broadcast_photo = None
-    broadcast_caption = None
+# ========== ОПРЕДЕЛЕНИЕ ID ГРУППЫ ==========
+@bot.message_handler(content_types=['new_chat_members'])
+def on_bot_added(message):
+    for member in message.new_chat_members:
+        if member.id == bot.get_me().id:
+            bot.send_message(message.chat.id, f"✅ Бот добавлен!\nID этой группы: `{message.chat.id}`", parse_mode="Markdown")
 
 # ========== СОХРАНЕНИЕ ВСЕХ ==========
 @bot.message_handler(func=lambda m: True)
 def save_all(m):
     add_user(m.chat.id, m.from_user.first_name, m.from_user.username)
 
-# ========== ЗАПУСК ==========
 if __name__ == "__main__":
     print("✅ Бот запущен")
     print(f"Админы: {ADMINS}")
