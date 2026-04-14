@@ -5,10 +5,12 @@ import os
 import time
 from datetime import datetime, timedelta
 import re
+import requests
 
 TOKEN = '8786806064:AAGnZbQeNQCow4txVsS_O_-BQkDLkARk6RU'
 ADMINS = [7717477509, 1334363706]
 GROUP_ID = -1003514715489
+DEEPSEEK_API_KEY = 'sk-56c80180bec2464b85903cf518bc1c13'  # Твой ключ DeepSeek
 
 bot = telebot.TeleBot(TOKEN)
 USERS_FILE = 'users.json'
@@ -48,6 +50,29 @@ def add_user(user_id, name, username):
 
 def is_admin(user_id):
     return user_id in ADMINS
+
+# ========== ИИ (DEEPSEEK) ==========
+def ask_deepseek(question, user_name):
+    try:
+        url = "https://api.deepseek.com/v1/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "model": "deepseek-chat",
+            "messages": [
+                {"role": "system", "content": f"Ты дружелюбный помощник. Тебя зовут NSP Бот. Ты помогаешь пользователю по имени {user_name}. Отвечай кратко и по делу."},
+                {"role": "user", "content": question}
+            ],
+            "max_tokens": 500
+        }
+        response = requests.post(url, headers=headers, json=payload, timeout=30)
+        if response.status_code != 200:
+            return "❌ Ошибка ИИ. Попробуй позже."
+        return response.json()['choices'][0]['message']['content']
+    except Exception as e:
+        return f"❌ Ошибка: {e}"
 
 # ========== СТАТИСТИКА ==========
 def get_stats():
@@ -180,15 +205,12 @@ def start(message):
     add_user(message.chat.id, message.from_user.first_name, message.from_user.username)
     bot.send_message(
         message.chat.id,
-        f"Привет, {message.from_user.first_name}! 👋\n\nНажми на кнопку, чтобы перейти на официальный сайт NSP.\n\n"
-        f"📋 Команды:\n"
-        f"/stats — статистика (админ)\n"
-        f"/users — количество пользователей (админ)\n"
-        f"/users_list — список пользователей (админ)\n"
-        f"/broadcast текст — текстовая рассылка (админ)\n"
-        f"/send_photo — фото-рассылка (админ)\n\n"
-        f"📩 Чтобы написать модераторам: /otp твой текст\n"
-        f"📸 Или отправь фото с подписью /otp",
+        f"Привет, {message.from_user.first_name}! 👋\n\n"
+        f"Я NSP Бот. Можешь задавать мне любые вопросы, я отвечу через ИИ.\n\n"
+        f"Также у меня есть функции:\n"
+        f"📩 /otp текст — написать модераторам\n"
+        f"📸 фото с подписью /otp — отправить фото модераторам\n\n"
+        f"Нажми на кнопку, чтобы перейти на сайт NSP.",
         reply_markup=start_keyboard()
     )
 
@@ -227,6 +249,11 @@ def handle_photo(message):
             bot.send_message(user_id, "✅ Твоё фото отправлено модераторам!")
         else:
             bot.send_message(user_id, "❌ Ошибка отправки фото.")
+    else:
+        # Если не /otp, отвечаем через ИИ
+        bot.send_chat_action(user_id, 'typing')
+        answer = ask_deepseek(caption, user_name)
+        bot.send_message(user_id, answer)
 
 @bot.message_handler(commands=['stats'])
 def stats_command(message):
@@ -283,12 +310,38 @@ def broadcast(message):
             fail += 1
     bot.send_message(message.chat.id, f"✅ Отправлено: {ok}\n❌ Не доставлено: {fail}")
 
+# ========== ОБРАБОТКА ЛЮБОГО СООБЩЕНИЯ (ИИ) ==========
 @bot.message_handler(func=lambda m: True)
-def save_all(m):
-    add_user(m.chat.id, m.from_user.first_name, m.from_user.username)
+def handle_ai(message):
+    user_id = message.chat.id
+    user_name = message.from_user.first_name
+    username = message.from_user.username
+    
+    add_user(user_id, user_name, username)
+    
+    # Если это команда — не обрабатываем (они уже обработаны выше)
+    if message.text and message.text.startswith('/'):
+        return
+    
+    # Если это голосовое — пересылаем в группу
+    if message.voice:
+        header = f"📩 Голосовое от пользователя\n👤 {user_name} (@{username if username else 'нет username'})\n🆔 {user_id}"
+        try:
+            bot.send_voice(GROUP_ID, message.voice.file_id, caption=header)
+        except:
+            pass
+        return
+    
+    # Всё остальное — отвечаем через ИИ
+    text = message.text or message.caption
+    if text:
+        bot.send_chat_action(user_id, 'typing')
+        answer = ask_deepseek(text, user_name)
+        bot.send_message(user_id, answer)
 
+# ========== ЗАПУСК ==========
 if __name__ == "__main__":
-    print("✅ Бот Badiworldbot запущен")
+    print("✅ Бот с ИИ запущен")
     print(f"Админы: {ADMINS}")
     print(f"ID группы: {GROUP_ID}")
     print(f"Пользователей: {len(get_users())}")
